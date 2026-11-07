@@ -7,7 +7,7 @@ describe('RollingStats', () => {
   });
 
   it('measures frame rate, inference time and hand visibility', () => {
-    const stats = new RollingStats(3000);
+    const stats = new RollingStats(3000, 0);
     // 21 frames, 50 ms apart = 20 FPS. Every other frame shows both hands.
     for (let i = 0; i <= 20; i++) {
       stats.add({ at: i * 50, inferenceMs: 30, leftHand: true, rightHand: i % 2 === 0 });
@@ -20,10 +20,18 @@ describe('RollingStats', () => {
   });
 
   it('drops frames older than the window', () => {
-    const stats = new RollingStats(1000);
+    const stats = new RollingStats(1000, 0);
     stats.add({ at: 0, inferenceMs: 500, leftHand: false, rightHand: false });
     stats.add({ at: 2000, inferenceMs: 10, leftHand: true, rightHand: true });
     stats.add({ at: 2100, inferenceMs: 10, leftHand: true, rightHand: true });
     expect(stats.summary()).toMatchObject({ frames: 2, inferenceMs: 10, bothHandsRate: 1 });
+  });
+
+  it('ignores warm-up frames', () => {
+    const stats = new RollingStats(3000, 1);
+    stats.add({ at: 0, inferenceMs: 5700, leftHand: false, rightHand: false });
+    stats.add({ at: 5700, inferenceMs: 10, leftHand: true, rightHand: true });
+    stats.add({ at: 5750, inferenceMs: 10, leftHand: true, rightHand: true });
+    expect(stats.summary()).toMatchObject({ frames: 2, inferenceMs: 10, fps: 20 });
   });
 });

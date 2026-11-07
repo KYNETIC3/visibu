@@ -35,7 +35,7 @@ async function init(msg: Extract<ToWorker, { type: 'init' }>) {
       lastError = err;
     }
   }
-  post({ type: 'error', message: `Tracker failed to start: ${String(lastError)}` });
+  post({ type: 'error', message: `Tracker failed to start: ${String(lastError)}`, fatal: true });
 }
 
 function track(msg: Extract<ToWorker, { type: 'frame' }>) {
@@ -51,7 +51,7 @@ function track(msg: Extract<ToWorker, { type: 'frame' }>) {
     const frame = packFrame(result);
     post({ type: 'result', frame, timestamp, inferenceMs }, [frame.buffer]);
   } catch (err) {
-    post({ type: 'error', message: String(err) });
+    post({ type: 'error', message: String(err), fatal: false });
   } finally {
     bitmap.close();
   }

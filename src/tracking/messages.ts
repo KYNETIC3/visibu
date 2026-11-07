@@ -9,4 +9,4 @@ export type ToWorker =
 export type FromWorker =
   | { type: 'ready'; delegate: Delegate; loadMs: number }
   | { type: 'result'; frame: Float32Array; timestamp: number; inferenceMs: number }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string; fatal: boolean };
