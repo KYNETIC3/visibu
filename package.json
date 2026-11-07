@@ -10,10 +10,10 @@
     "predev": "npm run assets",
     "dev": "vite",
     "prebuild": "npm run assets",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "1.2.2",

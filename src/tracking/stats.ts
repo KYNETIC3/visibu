@@ -18,10 +18,23 @@ export interface TrackingStats {
 
 export class RollingStats {
   private samples: FrameSample[] = [];
+  private skipped = 0;
 
-  constructor(private windowMs = 3000) {}
+  /**
+   * @param windowMs how much recent history to summarise
+   * @param warmupFrames frames to ignore at the start; MediaPipe's first call
+   *   takes seconds while it compiles, which would skew the averages
+   */
+  constructor(
+    private windowMs = 3000,
+    private warmupFrames = 1,
+  ) {}
 
   add(sample: FrameSample) {
+    if (this.skipped < this.warmupFrames) {
+      this.skipped++;
+      return;
+    }
     this.samples.push(sample);
     const cutoff = sample.at - this.windowMs;
     while (this.samples.length > 0 && this.samples[0].at < cutoff) this.samples.shift();

@@ -2,7 +2,7 @@
 // worker, draws the landmarks, and reports whether this device is fast enough.
 import { useEffect, useRef, useState } from 'react';
 import { Tracker } from '../tracking/tracker';
-import { hasPart, readPart, type Part } from '../tracking/frame';
+import { hasPart, LAYOUT, type Part } from '../tracking/frame';
 import { RollingStats, type TrackingStats } from '../tracking/stats';
 import type { Delegate } from '../tracking/messages';
 
@@ -25,13 +25,16 @@ export function TrackingCheck() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trackerRef = useRef<Tracker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const statsRef = useRef(new RollingStats());
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const statsRef = useRef<RollingStats>(null!);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [stats, setStats] = useState<TrackingStats | null>(null);
 
   useEffect(() => () => stop(), []);
 
   async function start() {
+    stop();
+    setStats(null);
     setStatus({ kind: 'starting' });
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -58,10 +61,15 @@ export function TrackingCheck() {
           });
           draw(frame);
         },
-        onError: (message) => setStatus({ kind: 'error', message }),
+        // The tracker has already stopped itself; release the camera too.
+        onError: (message) => {
+          stop();
+          setStatus({ kind: 'error', message });
+        },
       });
       trackerRef.current = tracker;
     } catch (err) {
+      stop();
       setStatus({ kind: 'error', message: cameraErrorMessage(err) });
     }
   }
@@ -71,6 +79,8 @@ export function TrackingCheck() {
     trackerRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    const video = videoRef.current;
+    if (video) video.srcObject = null;
   }
 
   // Refresh the numbers twice a second rather than on every frame.
@@ -86,17 +96,24 @@ export function TrackingCheck() {
     if (!canvas || !video) return;
     if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
     if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d')!;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const ctx = (ctxRef.current ??= canvas.getContext('2d'));
+    if (!ctx) return;
+    const { width, height } = canvas;
+    ctx.clearRect(0, 0, width, height);
+    // Read x and y straight from the packed frame to avoid allocating points.
     for (const [part, colour] of Object.entries(PART_COLOURS) as [Part, string][]) {
-      const points = readPart(frame, part);
-      if (!points) continue;
+      if (!hasPart(frame, part)) continue;
+      const { offset, points } = LAYOUT[part];
+      const radius = part === 'pose' ? 3 : 4;
       ctx.fillStyle = colour;
-      for (const p of points) {
-        ctx.beginPath();
-        ctx.arc(p.x * canvas.width, p.y * canvas.height, part === 'pose' ? 3 : 4, 0, Math.PI * 2);
-        ctx.fill();
+      ctx.beginPath();
+      for (let i = 0; i < points; i++) {
+        const x = frame[offset + i * 3] * width;
+        const y = frame[offset + i * 3 + 1] * height;
+        ctx.moveTo(x + radius, y);
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
       }
+      ctx.fill();
     }
   }
 
@@ -122,9 +139,14 @@ export function TrackingCheck() {
       </div>
 
       {status.kind === 'error' && (
-        <p className="error" role="alert">
-          {status.message}
-        </p>
+        <div className="error-box">
+          <p className="error" role="alert">
+            {status.message}
+          </p>
+          <button className="primary" onClick={start}>
+            Try again
+          </button>
+        </div>
       )}
 
       {status.kind === 'running' && (
@@ -168,7 +190,7 @@ export function TrackingCheck() {
 
 function cameraErrorMessage(err: unknown): string {
   const name = err instanceof DOMException ? err.name : '';
-  if (name === 'NotAllowedError') return 'Camera access was blocked. Allow the camera in your browser settings, then reload.';
+  if (name === 'NotAllowedError') return 'Camera access was blocked. Allow the camera in your browser settings, then try again.';
   if (name === 'NotFoundError') return 'No camera was found on this device.';
   if (!window.isSecureContext) return 'The camera needs a secure (HTTPS) page.';
   return `The camera could not start: ${String(err)}`;

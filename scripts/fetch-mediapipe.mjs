@@ -15,7 +15,10 @@ const MODEL = {
   file: 'holistic_landmarker.task',
   url: 'https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/1/holistic_landmarker.task',
   bytes: 13683609,
+  sha256: 'e2dab61191e2dcd0a15f943d8e3ed1dce13c82dfa597b9dd39f562975a50c3f8',
 };
+
+const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 
 await mkdir(wasmOut, { recursive: true });
 for (const name of await readdir(wasmSrc)) {
@@ -31,8 +34,13 @@ if (!existsSync(modelPath)) {
   if (buf.length !== MODEL.bytes) {
     throw new Error(`Model size ${buf.length} does not match pinned size ${MODEL.bytes}`);
   }
+  if (sha256(buf) !== MODEL.sha256) throw new Error('Downloaded model does not match the pinned sha256');
   await writeFile(modelPath, buf);
 }
 
-const sha = createHash('sha256').update(await readFile(modelPath)).digest('hex');
+// Check every run, so a stale or replaced file in public/ is caught too.
+const sha = sha256(await readFile(modelPath));
+if (sha !== MODEL.sha256) {
+  throw new Error(`${modelPath} does not match the pinned sha256. Delete it and run npm run assets again.`);
+}
 console.log(`MediaPipe assets ready. ${MODEL.file} sha256 ${sha}`);
