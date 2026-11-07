@@ -1,9 +1,17 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import { readJSON, writeJSON } from './storage'
 
 export type SignLanguage = 'ASL' | 'BSL' | 'Auslan' | 'NSL'
+export type Theme = 'system' | 'light' | 'dark'
+
+export const THEMES: { id: Theme; label: string }[] = [
+  { id: 'system', label: 'Match device' },
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+]
 
 export interface Settings {
+  theme: Theme
   captionSize: number
   showSpeaker: boolean
   showConfidence: boolean
@@ -21,6 +29,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  theme: 'system',
   captionSize: 42,
   showSpeaker: true,
   showConfidence: true,
@@ -55,10 +64,12 @@ const SettingsContext = createContext<SettingsContextValue | null>(null)
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(() => readJSON(KEY, DEFAULT_SETTINGS))
 
-  useEffect(() => {
+  // Layout effect so the theme and contrast apply before the first paint (no flash).
+  useLayoutEffect(() => {
     writeJSON(KEY, settings)
     const root = document.documentElement
     root.style.setProperty('--caption-size', `${settings.captionSize}px`)
+    root.dataset.theme = settings.theme
     root.dataset.contrast = settings.highContrast ? 'high' : 'normal'
     root.dataset.motion = settings.reduceMotion ? 'reduce' : 'normal'
   }, [settings])

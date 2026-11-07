@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { SwitchRow } from '../components/Switch'
-import { DEFAULT_SETTINGS, SIGN_LANGUAGES, usePrefersLessMotion, useSettings, type Settings as S, type SignLanguage } from '../lib/settings'
+import { DEFAULT_SETTINGS, SIGN_LANGUAGES, THEMES, usePrefersLessMotion, useSettings, type Settings as S, type SignLanguage } from '../lib/settings'
 
 export function Settings() {
   const { settings, update } = useSettings()
@@ -73,6 +73,21 @@ export function Settings() {
           <h2 id="h-disp" className="card__title" style={{ fontSize: 20 }}>
             Display and motion
           </h2>
+          <div className="opt" style={{ flexWrap: 'wrap' }}>
+            <div className="opt__body">
+              <div id="theme-label" className="opt__title">
+                Theme
+              </div>
+              <div className="opt__desc">Dark reduces glare in dim rooms.</div>
+            </div>
+            <div role="group" aria-labelledby="theme-label" className="row" style={{ gap: 8 }}>
+              {THEMES.map((t) => (
+                <button key={t.id} type="button" className="chip" aria-pressed={settings.theme === t.id} onClick={() => set({ theme: t.id })}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <SwitchRow title="High contrast captions" description="White text on black, stronger borders everywhere." checked={settings.highContrast} onChange={(v) => set({ highContrast: v })} />
           <SwitchRow title="Reduce motion" description="Turn off animations. Visibu also follows your device setting." checked={settings.reduceMotion} onChange={(v) => set({ reduceMotion: v })} />
           <SwitchRow title="Mirror camera view" description="Show your camera like a mirror." checked={settings.mirrorCamera} onChange={(v) => set({ mirrorCamera: v })} />
