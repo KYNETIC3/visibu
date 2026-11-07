@@ -15,57 +15,21 @@ export interface SignEvent {
 }
 
 export interface SignRecognizer {
-  readonly isDemo: boolean
   start(video: HTMLVideoElement, handlers: { onSign: (e: SignEvent) => void; onHands: (visible: boolean) => void }): void
   stop(): void
 }
 
 /**
- * Stand-in recogniser so the experience can be designed and tested end-to-end
- * before a model is connected. It "recognises" scripted phrases on a timer.
+ * Return a real recognizer here once a model is available. While this returns
+ * null, the Translate screen shows a static example caption that is never
+ * added to the conversation or saved to history.
  */
-export class DemoSignRecognizer implements SignRecognizer {
-  readonly isDemo = true
-  private timer: number | null = null
-  private phrases = [
-    'Hello, I would like to book an appointment for Thursday.',
-    'Could you please write that down for me?',
-    'Thank you, that is very helpful.',
-  ]
-
-  start(_video: HTMLVideoElement, { onSign, onHands }: { onSign: (e: SignEvent) => void; onHands: (v: boolean) => void }) {
-    this.stop()
-    onHands(true)
-    let p = 0
-    let w = 0
-    let rest = 0
-    this.timer = window.setInterval(() => {
-      if (rest > 0) {
-        rest--
-        return
-      }
-      const words = this.phrases[p % this.phrases.length].split(' ')
-      const last = w === words.length - 1
-      onSign({ word: words[w], confidence: 0.86 + Math.random() * 0.12, endsSentence: last })
-      w++
-      if (last) {
-        w = 0
-        p++
-        rest = 5 // pause between sentences
-      }
-    }, 850)
-  }
-
-  stop() {
-    if (this.timer !== null) window.clearInterval(this.timer)
-    this.timer = null
-  }
+export function createSignRecognizer(): SignRecognizer | null {
+  return null
 }
 
-/** Swap this factory for a real model when one is available. */
-export function createSignRecognizer(): SignRecognizer {
-  return new DemoSignRecognizer()
-}
+/** Shown in place of live sign captions until a model is connected. Never saved. */
+export const EXAMPLE_SIGN_CAPTION = 'Hello, I would like to book an appointment for Thursday.'
 
 interface Options {
   video: HTMLVideoElement | null
@@ -77,13 +41,14 @@ export function useSignRecognition({ video, active, onSentence }: Options) {
   const [words, setWords] = useState<string[]>([])
   const [lastSign, setLastSign] = useState<SignEvent | null>(null)
   const [handsVisible, setHandsVisible] = useState<boolean | null>(null)
-  const [r] = useState<SignRecognizer>(createSignRecognizer)
+  const [r] = useState<SignRecognizer | null>(createSignRecognizer)
   const sentenceCb = useRef(onSentence)
   useEffect(() => {
     sentenceCb.current = onSentence
   })
 
   useEffect(() => {
+    if (!r) return
     if (!active || !video) {
       r.stop()
       return
@@ -118,7 +83,7 @@ export function useSignRecognition({ video, active, onSentence }: Options) {
     words,
     lastSign,
     handsVisible,
-    isDemo: r.isDemo,
+    modelConnected: r !== null,
     clear: () => setWords([]),
   }
 }

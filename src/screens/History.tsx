@@ -31,6 +31,8 @@ export function History() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
 
+  const isEmpty = sessions.length === 0
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     return sessions.filter(
@@ -84,6 +86,7 @@ export function History() {
           <h1 className="page-title">Conversation history</h1>
           <p className="page-sub">Saved on this device only. Read back, copy or share anything you discussed.</p>
         </div>
+        {!isEmpty && (
         <div className="field" style={{ flex: '0 1 380px' }}>
           <label htmlFor="search" className="field__label">
             Search conversations
@@ -95,28 +98,26 @@ export function History() {
             <input id="search" type="search" className="input" style={{ width: '100%', paddingLeft: 42, background: 'var(--surface)' }} placeholder="Words, places or people" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
         </div>
+        )}
       </div>
 
-      <div role="group" aria-label="Filter conversations" className="row" style={{ gap: 8, marginBottom: 24 }}>
-        {FILTERS.map((f) => (
-          <button key={f.id} type="button" className="chip" aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
-            {f.label}
-          </button>
-        ))}
-      </div>
+      {!isEmpty && (
+        <div role="group" aria-label="Filter conversations" className="row" style={{ gap: 8, marginBottom: 24 }}>
+          {FILTERS.map((f) => (
+            <button key={f.id} type="button" className="chip" aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <p className="sr-only" role="status">
-        {notice || `${visible.length} conversation${visible.length === 1 ? '' : 's'} shown`}
+        {notice || (isEmpty ? '' : `${visible.length} conversation${visible.length === 1 ? '' : 's'} shown`)}
       </p>
 
-      {sessions.length === 0 ? (
+      {isEmpty ? (
         <div className="card card--xl empty-state">
-          <Icon name="hand" size={40} strokeWidth={1.4} />
           <h2 style={{ fontSize: 22, color: 'var(--ink)' }}>No conversations yet</h2>
-          <p>Conversations you have on the Translate screen are saved here automatically.</p>
-          <a className="btn btn--primary btn--lg" href="#/">
-            Start translating
-          </a>
         </div>
       ) : (
         <div className="split" style={{ gap: 24 }}>

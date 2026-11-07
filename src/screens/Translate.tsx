@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon'
 import { PartnerView } from '../components/PartnerView'
 import { formatTime, useConversation } from '../lib/history'
 import { useSettings } from '../lib/settings'
-import { useSignRecognition } from '../lib/signRecognizer'
+import { EXAMPLE_SIGN_CAPTION, useSignRecognition } from '../lib/signRecognizer'
 import type { useCamera } from '../lib/useCamera'
 import { useSpeechCaptions } from '../lib/useSpeechCaptions'
 
@@ -96,8 +96,11 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
   }, [turns.length, settings.reduceMotion])
 
   const isSpeech = mode === 'speech'
+  // Real caption text only. The example below is display-only: never copied, shown or saved.
   const captionText = isSpeech ? speech.interim || recentPartner : sign.words.join(' ')
-  const captionWords = captionText ? captionText.split(/\s+/) : []
+  const showExample = !isSpeech && !sign.modelConnected && live && !paused
+  const displayText = showExample ? EXAMPLE_SIGN_CAPTION : captionText
+  const captionWords = displayText ? displayText.split(/\s+/) : []
   const inProgress = isSpeech ? speech.interim.length > 0 : sign.words.length > 0 && !sign.lastSign?.endsSentence
   const lastTurn = turns[turns.length - 1]
 
@@ -140,7 +143,7 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
           handsVisible={mode === 'sign' ? sign.handsVisible : null}
           lastSign={sign.lastSign}
           showConfidence={settings.showConfidence}
-          showSign={mode === 'sign'}
+          showSign={mode === 'sign' && sign.modelConnected}
           onStart={() => void camera.start()}
         />
 
@@ -161,10 +164,10 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
 
         <QualityCard lighting={camera.lighting} handsVisible={sign.handsVisible} live={live} />
 
-        {sign.isDemo && (
+        {!sign.modelConnected && (
           <p className="card__hint" style={{ padding: '0 4px' }}>
-            <strong>Demo sign recognition.</strong> No sign-language model is connected yet, so signed captions are sample
-            sentences. Speech captions are real.
+            <strong>Sign recognition is not connected yet.</strong> The caption shows an example sentence that is never
+            saved. Speech captions, quick replies and typed messages are real.
           </p>
         )}
       </section>
@@ -209,10 +212,16 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
             ) : (
               <span />
             )}
-            <span className="card__hint">Live caption</span>
+            {showExample ? (
+              <span className="pill pill--muted" style={{ height: 32, fontSize: 14 }}>
+                Example · not saved
+              </span>
+            ) : (
+              <span className="card__hint">Live caption</span>
+            )}
           </div>
 
-          <p className="caption" aria-label="Live caption">
+          <p className={`caption${showExample ? ' caption--example' : ''}`} aria-label={showExample ? 'Example caption' : 'Live caption'}>
             {captionWords.length === 0 ? (
               <span className="caption__placeholder">
                 {paused

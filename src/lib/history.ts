@@ -43,6 +43,28 @@ export function upsertSession(session: Session) {
   save([session, ...rest])
 }
 
+/** Sentences an earlier demo recogniser saved as if they were signed. */
+const LEGACY_DEMO_PHRASES = new Set([
+  'Hello, I would like to book an appointment for Thursday.',
+  'Could you please write that down for me?',
+  'Thank you, that is very helpful.',
+])
+
+/** One-time cleanup: drop saved demo sentences, and sessions left empty. */
+export function purgeDemoTurns() {
+  const sessions = readArray<Session>(KEY)
+  let changed = false
+  const cleaned = sessions
+    .map((s) => {
+      const turns = s.turns.filter((t) => !(t.via === 'signed' && LEGACY_DEMO_PHRASES.has(t.text)))
+      if (turns.length === s.turns.length) return s
+      changed = true
+      return { ...s, turns, title: titleFor(turns) }
+    })
+    .filter((s) => s.turns.length > 0)
+  if (changed || cleaned.length !== sessions.length) writeJSON(KEY, cleaned)
+}
+
 export function deleteSession(id: string) {
   save(loadSessions().filter((s) => s.id !== id))
 }

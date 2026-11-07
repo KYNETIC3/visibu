@@ -742,6 +742,14 @@ main:focus {
   font-weight: 500;
 }
 
+.caption--example {
+  color: #6b6f76;
+}
+
+:root[data-contrast='high'] .caption-card .caption--example {
+  color: #d0d0d0;
+}
+
 .caption__word {
   display: inline-block;
   margin-right: 0.26em;

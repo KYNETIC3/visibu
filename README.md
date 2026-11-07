@@ -19,7 +19,7 @@ Open http://localhost:5173 and allow the camera and microphone.
 
 ## Connecting a sign-language model
 
-Sign recognition is currently a **demo** (`DemoSignRecognizer` in `src/lib/signRecognizer.ts`) that "recognises" sample sentences so the full experience can be tested. To plug in a real model (for example MediaPipe hand landmarks plus a classifier), implement the `SignRecognizer` interface and return it from `createSignRecognizer()`. The UI needs nothing else.
+No sign-language model is connected yet: `createSignRecognizer()` in `src/lib/signRecognizer.ts` returns `null`, and the Translate screen shows a static, clearly labelled example caption that is never added to the conversation or saved. To plug in a real model (for example MediaPipe hand landmarks plus a classifier), implement the `SignRecognizer` interface and return it from `createSignRecognizer()`. The UI needs nothing else.
 
 ## Accessibility notes
 
