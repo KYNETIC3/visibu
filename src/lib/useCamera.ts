@@ -10,8 +10,13 @@ export type Lighting = 'good' | 'dim' | 'bright' | 'unknown'
 export function useCamera() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  /** The getUserMedia request in flight, so repeat calls share it instead of racing. */
+  const pendingRef = useRef<Promise<void> | null>(null)
+  /** Bumped by stop(); a request from an older generation discards its stream. */
+  const genRef = useRef(0)
   const [status, setStatus] = useState<CameraStatus>('idle')
   const [lighting, setLighting] = useState<Lighting>('unknown')
+  const [errorName, setErrorName] = useState('')
 
   const attach = useCallback((el: HTMLVideoElement | null) => {
     videoRef.current = el
@@ -21,34 +26,56 @@ export function useCamera() {
     }
   }, [])
 
-  const start = useCallback(async () => {
+  const start = useCallback((): Promise<void> => {
     if (streamRef.current) {
       setStatus('live')
-      return
+      return Promise.resolve()
     }
+    // StrictMode runs effects twice in dev: share the request already in flight.
+    if (pendingRef.current) return pendingRef.current
     if (!navigator.mediaDevices?.getUserMedia) {
       setStatus('unavailable')
-      return
+      return Promise.resolve()
     }
+    const gen = genRef.current
     setStatus('requesting')
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 960 }, facingMode: 'user' },
-        audio: false,
-      })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play().catch(() => {})
+    setErrorName('')
+    const request = (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 960 }, facingMode: 'user' },
+          audio: false,
+        })
+        if (gen !== genRef.current) {
+          // stop() ran while permission was pending: release the camera at once.
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play().catch(() => {})
+        }
+        if (gen === genRef.current) setStatus('live')
+      } catch (err) {
+        if (gen !== genRef.current) return
+        const name = err instanceof DOMException ? err.name : ''
+        setErrorName(name)
+        setStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : name === 'NotFoundError' ? 'unavailable' : 'error')
       }
-      setStatus('live')
-    } catch (err) {
-      const name = err instanceof DOMException ? err.name : ''
-      setStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : name === 'NotFoundError' ? 'unavailable' : 'error')
-    }
+    })()
+    pendingRef.current = request
+    // Attached after the assignment above, so it clears the slot even if the
+    // request settled synchronously. Only clears if it is still this request.
+    void request.finally(() => {
+      if (pendingRef.current === request) pendingRef.current = null
+    })
+    return request
   }, [])
 
   const stop = useCallback(() => {
+    genRef.current++
+    pendingRef.current = null
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
@@ -76,7 +103,10 @@ export function useCamera() {
     return () => window.clearInterval(id)
   }, [status])
 
+  // Release the camera on unmount. This deliberately does not cancel a pending
+  // request: StrictMode's simulated unmount would discard it, and the remount
+  // would then race a second getUserMedia against the device it still holds.
   useEffect(() => () => streamRef.current?.getTracks().forEach((t) => t.stop()), [])
 
-  return { videoRef, attach, status, lighting, start, stop }
+  return { videoRef, attach, status, errorName, lighting, start, stop }
 }

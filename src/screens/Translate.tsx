@@ -136,6 +136,7 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
         <CameraPanel
           attach={attachVideo}
           status={camera.status}
+          errorName={camera.errorName}
           lighting={camera.lighting}
           mirror={settings.mirrorCamera}
           paused={paused}

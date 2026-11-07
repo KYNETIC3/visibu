@@ -5,6 +5,8 @@ import { Icon } from './Icon'
 interface Props {
   attach: (el: HTMLVideoElement | null) => void
   status: CameraStatus
+  /** DOMException name from the last failed request, e.g. NotReadableError. */
+  errorName?: string
   lighting: Lighting
   mirror: boolean
   paused: boolean
@@ -47,7 +49,10 @@ export function CameraPanel(p: Props) {
         <div className="camera__empty" role="status">
           <Icon name="camera" size={40} strokeWidth={1.4} />
           <h2 style={{ fontSize: 22 }}>{empty.title}</h2>
-          <p>{empty.body}</p>
+          <p>
+            {empty.body}
+            {p.status === 'error' && p.errorName ? ` (${p.errorName})` : ''}
+          </p>
           {empty.action && (
             <button type="button" className="btn btn--lg" onClick={p.onStart}>
               {empty.action}

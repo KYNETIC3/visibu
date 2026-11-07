@@ -98,6 +98,7 @@ export function Setup({ camera }: { camera: ReturnType<typeof useCamera> }) {
                 <CameraPanel
                   attach={camera.attach}
                   status={camera.status}
+                  errorName={camera.errorName}
                   lighting={camera.lighting}
                   mirror={settings.mirrorCamera}
                   paused={false}
