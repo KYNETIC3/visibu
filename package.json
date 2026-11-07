@@ -1,25 +1,35 @@
 {
   "name": "visibu",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "description": "Coffee counter conversation assistant for Deaf ASL signers and hearing baristas. LaunchPad Hacks 2026 prototype.",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
+    "assets": "node scripts/fetch-mediapipe.mjs",
+    "predev": "npm run assets",
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview"
+    "prebuild": "npm run assets",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
+    "lint": "oxlint"
   },
   "dependencies": {
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "@fontsource/atkinson-hyperlegible-next": "5.3.0",
+    "@mediapipe/tasks-vision": "1.2.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@types/node": "^24.19.2",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.2",
-    "oxlint": "^1.90.0",
-    "typescript": "~7.0.2",
-    "vite": "^8.3.6"
+    "@vitejs/plugin-react": "^6.2.1",
+    "oxlint": "^1.92.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
   }
 }
