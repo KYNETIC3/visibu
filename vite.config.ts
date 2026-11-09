@@ -16,6 +16,13 @@ const productionHeaders = Object.fromEntries(
 export default defineConfig({
   plugins: [react()],
   worker: { format: 'es' },
+  // Prevent Vite from attempting to transform MediaPipe WASM files as ES modules.
+  // These are static assets in /public/mediapipe/wasm/ and should be fetched via XHR.
+  optimizeDeps: {
+    exclude: ['@mediapipe/tasks-vision'],
+  },
+  // Ensure WASM files are not processed as JS modules
+  assetsInclude: ['**/mediapipe/wasm/**'],
   preview: { headers: productionHeaders },
   test: { environment: 'node', include: ['src/**/*.test.ts'] },
 });

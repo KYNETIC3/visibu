@@ -15,7 +15,9 @@ function post(message: FromWorker, transfer: Transferable[] = []) {
 }
 
 async function create(wasmPath: string, modelPath: string, delegate: Delegate) {
-  const fileset = await FilesetResolver.forVisionTasks(wasmPath, true);
+  // useLegacyWasmPaths = false (default) to avoid Vite trying to process
+  // dynamic imports of WASM module files from /public
+  const fileset = await FilesetResolver.forVisionTasks(wasmPath, false);
   return HolisticLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: modelPath, delegate },
     runningMode: 'VIDEO',
