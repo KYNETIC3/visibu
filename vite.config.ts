@@ -21,8 +21,10 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['@mediapipe/tasks-vision'],
   },
-  // Ensure WASM files are not processed as JS modules
-  assetsInclude: ['**/mediapipe/wasm/**'],
+  // Note: do NOT add /mediapipe/wasm to assetsInclude. MediaPipe import()s its
+  // loader script at runtime; as an "asset", Vite answers that import with
+  // `export default "<url>"`, the loader never runs, and the tracker fails
+  // with "ModuleFactory not set."
   preview: { headers: productionHeaders },
   test: { environment: 'node', include: ['src/**/*.test.ts'] },
 });
