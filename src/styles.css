@@ -33,6 +33,18 @@
 
   --camera: #1e2126;
 
+  /* Text on solid fills, hover states and status colours */
+  --on-ink: #ffffff;
+  --on-accent: #ffffff;
+  --ink-hover: #2e3036;
+  --line-hover: #d6d3cb;
+  --placeholder: #6b6f76;
+  --warn-ink: #8f4209;
+  --error: #b3261e;
+  --tip-do-text: #1d3b2c;
+  --tip-avoid-text: #5c3410;
+  --shadow: rgba(23, 24, 26, 0.3);
+
   --radius-s: 12px;
   --radius-m: 18px;
   --radius-l: 24px;
@@ -55,6 +67,120 @@
   --muted: #262626;
   --you-ink: #142b80;
   --partner-ink: #4d2200;
+}
+
+/*
+ * Dark theme. data-theme is the user's choice: 'system' (follow the device),
+ * 'light' or 'dark'. The blocks are repeated because CSS can't share a
+ * declaration list between a media query and an attribute selector.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #151618;
+    --bg-raised: #1b1c1f;
+    --surface: #212226;
+    --surface-muted: #2c2e33;
+    --hover: #2a2c31;
+    --line: #34363c;
+    --line-strong: #4a4d55;
+    --ink: #f2f1ed;
+    --ink-2: #d4d3cf;
+    --muted: #b0b2b8;
+    --you: #8ea2f0;
+    --you-ink: #b4c2f7;
+    --you-tint: #232a45;
+    --you-tint-2: #1f2438;
+    --you-line: #36406a;
+    --partner: #e0a46e;
+    --partner-ink: #f0c195;
+    --partner-tint: #3a2a1c;
+    --partner-tint-2: #2e2319;
+    --partner-line: #5a3f27;
+    --ok: #6fd08c;
+    --ok-ink: #8fe0a8;
+    --ok-tint: #1c3326;
+    --camera: #0e0f11;
+    --on-ink: #17181a;
+    --on-accent: #17181a;
+    --ink-hover: #d8d6d0;
+    --line-hover: #44474e;
+    --placeholder: #9a9ca3;
+    --warn-ink: #f0b07a;
+    --error: #ff8a80;
+    --tip-do-text: #cfe9d9;
+    --tip-avoid-text: #f3d6bd;
+    --shadow: rgba(0, 0, 0, 0.55);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #151618;
+  --bg-raised: #1b1c1f;
+  --surface: #212226;
+  --surface-muted: #2c2e33;
+  --hover: #2a2c31;
+  --line: #34363c;
+  --line-strong: #4a4d55;
+  --ink: #f2f1ed;
+  --ink-2: #d4d3cf;
+  --muted: #b0b2b8;
+  --you: #8ea2f0;
+  --you-ink: #b4c2f7;
+  --you-tint: #232a45;
+  --you-tint-2: #1f2438;
+  --you-line: #36406a;
+  --partner: #e0a46e;
+  --partner-ink: #f0c195;
+  --partner-tint: #3a2a1c;
+  --partner-tint-2: #2e2319;
+  --partner-line: #5a3f27;
+  --ok: #6fd08c;
+  --ok-ink: #8fe0a8;
+  --ok-tint: #1c3326;
+  --camera: #0e0f11;
+  --on-ink: #17181a;
+  --on-accent: #17181a;
+  --ink-hover: #d8d6d0;
+  --line-hover: #44474e;
+  --placeholder: #9a9ca3;
+  --warn-ink: #f0b07a;
+  --error: #ff8a80;
+  --tip-do-text: #cfe9d9;
+  --tip-avoid-text: #f3d6bd;
+  --shadow: rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+/* High contrast on dark: pure black ground, white text, strong borders. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])[data-contrast='high'] {
+    --bg: #000000;
+    --bg-raised: #000000;
+    --surface: #0b0b0b;
+    --surface-muted: #262626;
+    --line: #9a9a9a;
+    --line-strong: #d0d0d0;
+    --ink: #ffffff;
+    --ink-2: #f2f2f2;
+    --muted: #e0e0e0;
+    --you-ink: #cdd7ff;
+    --partner-ink: #ffd6b0;
+  }
+}
+
+:root[data-theme='dark'][data-contrast='high'] {
+  --bg: #000000;
+  --bg-raised: #000000;
+  --surface: #0b0b0b;
+  --surface-muted: #262626;
+  --line: #9a9a9a;
+  --line-strong: #d0d0d0;
+  --ink: #ffffff;
+  --ink-2: #f2f2f2;
+  --muted: #e0e0e0;
+  --you-ink: #cdd7ff;
+  --partner-ink: #ffd6b0;
 }
 
 /* ---------- Base ---------- */
@@ -127,14 +253,14 @@ p {
   padding: 12px 18px;
   border-radius: var(--radius-s);
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   font-weight: 700;
   text-decoration: none;
 }
 
 .skip-link:focus {
   top: 12px;
-  color: #fff;
+  color: var(--on-ink);
 }
 
 /* ---------- Layout ---------- */
@@ -335,8 +461,8 @@ main:focus {
 
 .card--lift:hover {
   transform: translateY(-2px);
-  box-shadow: 0 14px 32px -18px rgba(23, 24, 26, 0.28);
-  border-color: #d6d3cb;
+  box-shadow: 0 14px 32px -18px var(--shadow);
+  border-color: var(--line-hover);
 }
 
 .card--xl {
@@ -374,7 +500,7 @@ main:focus {
 
 .btn:hover {
   background: var(--hover);
-  border-color: #d6d3cb;
+  border-color: var(--line-hover);
   color: var(--ink);
 }
 
@@ -391,13 +517,13 @@ main:focus {
 .btn--primary {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .btn--primary:hover {
-  background: #2e3036;
-  border-color: #2e3036;
-  color: #fff;
+  background: var(--ink-hover);
+  border-color: var(--ink-hover);
+  color: var(--on-ink);
 }
 
 .btn--lg {
@@ -434,7 +560,7 @@ main:focus {
 .chip[aria-pressed='true'] {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 /* Segmented control */
@@ -488,7 +614,7 @@ main:focus {
 .size-btn[aria-pressed='true'] {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 /* Switch */
@@ -663,7 +789,10 @@ main:focus {
   padding: 14px 16px;
   border-radius: var(--radius-m);
   background: rgba(255, 255, 255, 0.95);
-  color: var(--ink);
+  color: #17181a;
+  --muted: #4a4e56;
+  --line: #e4e2dc;
+  --you: #3553c8;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -720,7 +849,7 @@ main:focus {
 }
 
 .quality__value--warn {
-  color: #8f4209;
+  color: var(--warn-ink);
 }
 
 .quality__value--unknown {
@@ -738,12 +867,12 @@ main:focus {
 }
 
 .caption__placeholder {
-  color: #6b6f76;
+  color: var(--placeholder);
   font-weight: 500;
 }
 
 .caption--example {
-  color: #6b6f76;
+  color: var(--placeholder);
 }
 
 :root[data-contrast='high'] .caption-card .caption--example {
@@ -892,7 +1021,7 @@ main:focus {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: #fff;
+  background: var(--bg);
   color: var(--ink);
   display: flex;
   flex-direction: column;
@@ -945,7 +1074,7 @@ main:focus {
 .step-btn[aria-current='step'] {
   background: var(--surface);
   border-color: var(--you-line);
-  box-shadow: 0 10px 28px -20px rgba(23, 24, 26, 0.35);
+  box-shadow: 0 10px 28px -20px var(--shadow);
 }
 
 .step-num {
@@ -963,12 +1092,12 @@ main:focus {
 
 .step-num--on {
   background: var(--you);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .step-num--done {
   background: var(--ok);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .step-title {
@@ -1006,7 +1135,7 @@ main:focus {
 
 .tip--do {
   background: var(--ok-tint);
-  color: #1d3b2c;
+  color: var(--tip-do-text);
 }
 
 .tip--do strong {
@@ -1015,7 +1144,7 @@ main:focus {
 
 .tip--avoid {
   background: var(--partner-tint);
-  color: #5c3410;
+  color: var(--tip-avoid-text);
 }
 
 .tip--avoid strong {
@@ -1056,7 +1185,7 @@ main:focus {
 .session-btn[aria-current='true'] {
   background: var(--surface);
   border-color: var(--you-line);
-  box-shadow: 0 10px 28px -20px rgba(23, 24, 26, 0.35);
+  box-shadow: 0 10px 28px -20px var(--shadow);
 }
 
 .count-tag {
@@ -1216,18 +1345,18 @@ button.primary {
   border: 0;
   border-radius: 14px;
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   font-weight: 600;
   font-size: 17px;
 }
 
 button.primary:hover {
-  background: #2e3036;
+  background: var(--ink-hover);
 }
 
 .stage button.primary {
   background: #fff;
-  color: var(--ink);
+  color: #17181a;
 }
 
 .stats {
@@ -1262,7 +1391,7 @@ button.primary:hover {
 
 .fail,
 .error {
-  color: #b3261e;
+  color: var(--error);
 }
 
 .error {

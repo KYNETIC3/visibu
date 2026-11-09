@@ -14,7 +14,7 @@ Visibu is not an ASL translator. It recognises a small set of signs taught by th
 - **Translate:** the camera sits on the side and captions are large. "I'm signing" and "Partner is speaking" modes, a full-screen **Show to partner** view, quick replies and typed messages.
 - **Camera setup:** a three-step visual guide (allow camera, light and framing with a live brightness check, languages). No sound is needed at any step.
 - **History:** conversations saved on this device only, with search, date filters, copy, share and delete.
-- **Accessibility:** caption size, high contrast, reduced motion, and visual alerts (screen glow, vibration) in place of sound.
+- **Accessibility:** caption size, light or dark theme (follows the device by default), high contrast, reduced motion, and visual alerts (screen glow, vibration) in place of sound.
 - **Tracking check:** the Stage 0 device check (speed, hand visibility, GPU or CPU).
 
 ## Run it locally
@@ -68,7 +68,6 @@ The **UI, hand tracking (MediaPipe), and speech-to-text (Web Speech API) pipelin
 - Hearing learners built and tested this prototype, and no Deaf users have tested it.
 - The tracker reads hands, face and body, but nothing in the app reads facial grammar yet.
 - Sign recognition is rule-based and only knows HELLO, THANK YOU, YES, NO and PLEASE.
-- The redesigned interface is light-only for now.
 - Accuracy figures will be added once they are measured.
 
 ## Credits
