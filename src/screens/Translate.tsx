@@ -5,6 +5,7 @@ import { PartnerView } from '../components/PartnerView'
 import { formatTime, useConversation } from '../lib/history'
 import { useSettings } from '../lib/settings'
 import { EXAMPLE_SIGN_CAPTION, useSignRecognition } from '../lib/signRecognizer'
+import { useTracker } from '../lib/useTracker'
 import type { useCamera } from '../lib/useCamera'
 import { useSpeechCaptions } from '../lib/useSpeechCaptions'
 
@@ -38,6 +39,17 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
   const listEnd = useRef<HTMLLIElement>(null)
 
   const live = camera.status === 'live'
+
+  // Tracker for sign recognition (runs MediaPipe Holistic in a worker)
+  // Tracker runs as a side effect; we only need its frame publishing to the bus.
+  useTracker({
+    video: videoEl,
+    active: live && !paused && mode === 'sign' && partnerText === null,
+    onError: (msg) => {
+      console.error('[Tracker]', msg);
+      // Could surface to UI via a toast/banner if desired
+    },
+  })
   const attach = camera.attach
   const attachVideo = useCallback(
     (el: HTMLVideoElement | null) => {
