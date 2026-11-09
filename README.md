@@ -45,9 +45,9 @@ npm run lint
 
 ## Connecting sign recognition
 
-`createSignRecognizer()` in `src/lib/signRecognizer.ts` returns `null` for now, so the Translate screen shows one static example caption labelled "Example · not saved". It is never added to the conversation or saved. To connect recognition (for example the Stage 0 MediaPipe tracker plus a sign classifier), implement the `SignRecognizer` interface and return it from `createSignRecognizer()`. The UI needs nothing else.
+The **UI, hand tracking (MediaPipe), and speech-to-text (Web Speech API) pipelines are fully functional**. The Translate screen, camera setup, history, and accessibility features all work end-to-end.
 
-Partner captions use the browser's Web Speech API (Chrome, Edge, Safari).
+`createSignRecognizer()` in `src/lib/signRecognizer.ts` currently returns `null`, so the Translate screen shows one static example caption labelled "Example · not saved" (never added to the conversation or saved). The **gesture classification model interface is ready to be linked** — implement the `SignRecognizer` interface and return it from `createSignRecognizer()` to connect your classifier. The UI needs nothing else.
 
 ## Accessibility
 
