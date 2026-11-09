@@ -31,6 +31,15 @@ export function useTracker({
   const [loadMs, setLoadMs] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Keep callbacks in refs so new inline functions from the caller don't
+  // recreate (and reload) the tracker on every render.
+  const onReadyRef = useRef(onReady);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onReadyRef.current = onReady;
+    onErrorRef.current = onError;
+  }, [onReady, onError]);
+
   const startTracker = useCallback(() => {
     if (!video || trackerRef.current) return;
 
@@ -43,7 +52,7 @@ export function useTracker({
         setLoadMs(ms);
         setStatus('running');
         tracker.start(video);
-        onReady?.(d, ms);
+        onReadyRef.current?.(d, ms);
       },
       onFrame: (frame, timestamp, _inferenceMs) => {
         // Publish to frame bus for sign recognition
@@ -52,12 +61,12 @@ export function useTracker({
       onError: (message) => {
         setStatus('error');
         setError(message);
-        onError?.(message);
+        onErrorRef.current?.(message);
       },
     });
 
     trackerRef.current = tracker;
-  }, [video, onReady, onError]);
+  }, [video]);
 
   const stopTracker = useCallback(() => {
     trackerRef.current?.dispose();

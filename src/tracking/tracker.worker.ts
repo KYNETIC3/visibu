@@ -5,7 +5,23 @@ import { FilesetResolver, HolisticLandmarker } from '@mediapipe/tasks-vision';
 import { packFrame } from './frame';
 import type { Delegate, FromWorker, ToWorker } from './messages';
 
-declare const self: DedicatedWorkerGlobalScope;
+declare const self: DedicatedWorkerGlobalScope & { import?: (url: string) => Promise<unknown> };
+
+// Dev only: Vite rewrites MediaPipe's runtime import() of its loader script to
+// `<url>?import`, which it refuses to serve from /public. MediaPipe uses
+// self.import when defined, so load the loader through a blob URL instead
+// (Vite leaves blob: URLs alone). Production builds don't rewrite imports.
+if (import.meta.env.DEV) {
+  self.import = async (url: string) => {
+    const code = await (await fetch(url)).text();
+    const blobUrl = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+    try {
+      return await import(/* @vite-ignore */ blobUrl);
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+  };
+}
 
 let landmarker: HolisticLandmarker | null = null;
 let lastTimestamp = -1;
@@ -15,9 +31,11 @@ function post(message: FromWorker, transfer: Transferable[] = []) {
 }
 
 async function create(wasmPath: string, modelPath: string, delegate: Delegate) {
-  // useLegacyWasmPaths = false (default) to avoid Vite trying to process
-  // dynamic imports of WASM module files from /public
-  const fileset = await FilesetResolver.forVisionTasks(wasmPath, false);
+  // This is a module worker, where importScripts() is unavailable, so MediaPipe
+  // falls back to import() of the loader. Only the ES-module loader
+  // (vision_wasm_module_internal.js) sets globalThis.ModuleFactory; the classic
+  // one declares a module-scoped `var` and fails with "ModuleFactory not set."
+  const fileset = await FilesetResolver.forVisionTasks(wasmPath, true);
   return HolisticLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: modelPath, delegate },
     runningMode: 'VIDEO',

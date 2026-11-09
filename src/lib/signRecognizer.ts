@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { readPart, hasPart, type Point } from '../tracking/frame';
+import { readPart, type Point } from '../tracking/frame';
 
 /**
  * A single recognised sign with confidence and sentence-boundary flag.
@@ -20,11 +20,13 @@ export interface SignEvent {
 export interface SignClassifier {
   /**
    * Classify a single frame's hand landmarks.
-   * @param leftHand  21 landmarks (x,y,z normalized 0–1) or null if not visible
-   * @param rightHand 21 landmarks (x,y,z normalized 0–1) or null if not visible
+   * Called once per frame; implementations may keep motion history.
+   * @param primary   21 landmarks of the dominant hand, or null
+   * @param secondary 21 landmarks of the other hand, or null
+   * @param body      face / chest positions, when tracked
    * @returns Recognised sign or null if no sign detected in this frame
    */
-  classify(leftHand: Point[] | null, rightHand: Point[] | null): SignEvent | null;
+  classify(primary: Point[] | null, secondary: Point[] | null, body?: BodyContext): SignEvent | null;
 
   /** Reset any internal temporal state (e.g., between sentences). */
   reset(): void;
@@ -82,172 +84,180 @@ class FrameBus {
 /** Singleton frame bus. The tracker should call `frameBus.publish(frame, timestamp)` on each result. */
 export const frameBus = new FrameBus();
 
+/** Frames of hand history the heuristic classifier looks back over. */
+const HISTORY = 15;
+/** Minimum frames of history before any motion-based sign can fire. */
+const MIN_MOTION_FRAMES = 8;
+/** Per-frame movement below this is treated as tracking jitter. */
+const JITTER = 0.004;
+
+interface Sample {
+  wrist: Point;
+  tip: Point;
+}
+
+const dist2 = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
+
+/** Counts direction reversals along one axis, ignoring jitter. */
+function reversals(values: number[]): number {
+  let flips = 0;
+  let lastSign = 0;
+  for (let i = 1; i < values.length; i++) {
+    const d = values[i] - values[i - 1];
+    if (Math.abs(d) < JITTER) continue;
+    const s = Math.sign(d);
+    if (lastSign !== 0 && s !== lastSign) flips++;
+    lastSign = s;
+  }
+  return flips;
+}
+
+const range = (values: number[]) => Math.max(...values) - Math.min(...values);
+
 /**
  * Heuristic-based sign classifier (reference implementation).
- * Recognises a tiny vocabulary from hand shape + motion heuristics.
- * Replace with a real ML model by implementing SignClassifier.
+ * Recognises a tiny vocabulary from hand shape + motion over a short window.
+ * DEMONSTRATION ONLY — replace with a trained model by implementing SignClassifier.
  */
-class HeuristicSignClassifier implements SignClassifier {
-  private lastLeft: Point[] | null = null;
-  private lastRight: Point[] | null = null;
-  private frameCount = 0;
+export class HeuristicSignClassifier implements SignClassifier {
+  private history: Sample[] = [];
 
-  classify(leftHand: Point[] | null, rightHand: Point[] | null): SignEvent | null {
-    this.frameCount++;
+  classify(primary: Point[] | null, _secondary: Point[] | null, body?: BodyContext): SignEvent | null {
+    if (!primary || !primary[0] || !primary[8]) return null;
 
-    // Simple heuristic: detect "HELLO" (open hand wave) and "THANK YOU" (fingers to chin)
-    // This is a DEMONSTRATION ONLY — swap for a trained model.
+    this.history.push({ wrist: primary[0], tip: primary[8] });
+    if (this.history.length > HISTORY) this.history.shift();
+    if (this.history.length < MIN_MOTION_FRAMES) return null;
 
-    const activeHand = this.selectHand(leftHand, rightHand);
-    if (!activeHand) return null;
+    const wristX = this.history.map((s) => s.wrist.x);
+    const wristY = this.history.map((s) => s.wrist.y);
+    const tipX = this.history.map((s) => s.tip.x);
+    const first = this.history[0];
+    const last = this.history[this.history.length - 1];
 
-    const isOpen = this.isOpenHand(activeHand);
-    const isFist = this.isFist(activeHand);
-    const isPointing = this.isPointing(activeHand);
-    const movedUp = this.movedUp(activeHand);
+    const open = this.isOpenHand(primary);
+    const fist = this.isFist(primary);
+    const pointing = this.isPointing(primary);
 
-    // HELLO: open hand, moving up/out
-    if (isOpen && movedUp && this.frameCount > 10) {
-      return { word: 'HELLO', confidence: 0.82, endsSentence: true };
+    // NO: index (and middle) finger snapping side to side.
+    if (pointing && range(tipX) > 0.03 && reversals(tipX) >= 2) {
+      return { word: 'NO', confidence: 0.75, endsSentence: true };
     }
 
-    // THANK YOU: flat hand moving from chin forward
-    if (isOpen && !movedUp && this.isNearFace(activeHand)) {
-      return { word: 'THANK YOU', confidence: 0.78, endsSentence: true };
-    }
-
-    // YES: fist nodding
-    if (isFist && movedUp) {
+    // YES: fist nodding up and down.
+    if (fist && range(wristY) > 0.03 && reversals(wristY) >= 2) {
       return { word: 'YES', confidence: 0.75, endsSentence: true };
     }
 
-    // NO: index finger wagging
-    if (isPointing && this.wagging(activeHand)) {
-      return { word: 'NO', confidence: 0.72, endsSentence: true };
+    if (!open) return null;
+
+    // THANK YOU: flat hand starts at the chin and moves forward/down, away from the face.
+    const startedAtFace = body?.face
+      ? dist2(first.tip, body.face) < 0.12
+      : first.tip.y < 0.35;
+    const movedAway = body?.face
+      ? dist2(last.tip, body.face) - dist2(first.tip, body.face) > 0.08
+      : last.tip.y - first.tip.y > 0.06;
+    if (startedAtFace && movedAway) {
+      return { word: 'THANK YOU', confidence: 0.78, endsSentence: true };
     }
 
-    // PLEASE: flat hand circling on chest
-    if (isOpen && this.isCircling(activeHand)) {
+    // PLEASE: flat hand circling on the chest.
+    const nearChest = body?.chest ? dist2(last.wrist, body.chest) < 0.2 : last.wrist.y > 0.45;
+    const circling =
+      range(wristX) > 0.04 &&
+      range(wristY) > 0.04 &&
+      reversals(wristX) >= 1 &&
+      reversals(wristY) >= 1 &&
+      dist2(first.wrist, last.wrist) < Math.max(range(wristX), range(wristY)) * 0.6;
+    if (nearChest && circling) {
       return { word: 'PLEASE', confidence: 0.7, endsSentence: false };
+    }
+
+    // HELLO: open hand moving up, or out sideways, in one sweep.
+    const rise = first.wrist.y - last.wrist.y;
+    const sweep = Math.abs(last.wrist.x - first.wrist.x);
+    if ((rise > 0.06 || sweep > 0.08) && reversals(wristY) === 0) {
+      return { word: 'HELLO', confidence: 0.8, endsSentence: true };
     }
 
     return null;
   }
 
   reset(): void {
-    this.lastLeft = null;
-    this.lastRight = null;
-    this.frameCount = 0;
-  }
-
-  private selectHand(left: Point[] | null, right: Point[] | null): Point[] | null {
-    if (left && !right) return left;
-    if (right && !left) return right;
-    if (left && right) {
-      // Prefer hand with higher average confidence (visible landmarks)
-      const leftScore = this.visibilityScore(left);
-      const rightScore = this.visibilityScore(right);
-      return leftScore >= rightScore ? left : right;
-    }
-    return null;
-  }
-
-  private visibilityScore(hand: Point[]): number {
-    let sum = 0;
-    for (const p of hand) sum += Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z) ? 1 : 0;
-    return sum / hand.length;
+    this.history = [];
   }
 
   private isOpenHand(hand: Point[]): boolean {
-    // Fingers extended: tips farther from wrist than MCPs
     const wrist = hand[0];
-    const tips = [4, 8, 12, 16, 20]; // thumb, index, middle, ring, pinky tips
-    const mcps = [2, 5, 9, 13, 17];
+    const tips = [8, 12, 16, 20];
+    const pips = [6, 10, 14, 18];
     let extended = 0;
     for (let i = 0; i < tips.length; i++) {
-      const tip = hand[tips[i]];
-      const mcp = hand[mcps[i]];
-      if (tip && mcp && this.dist(tip, wrist) > this.dist(mcp, wrist) * 1.2) extended++;
+      if (dist3(hand[tips[i]], wrist) > dist3(hand[pips[i]], wrist) * 1.1) extended++;
     }
     return extended >= 4;
   }
 
   private isFist(hand: Point[]): boolean {
     const wrist = hand[0];
-    const tips = [4, 8, 12, 16, 20];
+    const tips = [8, 12, 16, 20];
+    const pips = [6, 10, 14, 18];
     let curled = 0;
-    for (const tipIdx of tips) {
-      const tip = hand[tipIdx];
-      if (tip && this.dist(tip, wrist) < this.dist(hand[5], wrist) * 0.8) curled++;
+    for (let i = 0; i < tips.length; i++) {
+      if (dist3(hand[tips[i]], wrist) < dist3(hand[pips[i]], wrist)) curled++;
     }
     return curled >= 4;
   }
 
   private isPointing(hand: Point[]): boolean {
     const wrist = hand[0];
-    const indexTip = hand[8];
-    const indexMcp = hand[5];
-    const middleTip = hand[12];
-    if (!indexTip || !indexMcp || !middleTip) return false;
-    return (
-      this.dist(indexTip, wrist) > this.dist(indexMcp, wrist) * 1.5 &&
-      this.dist(middleTip, wrist) < this.dist(hand[9], wrist) * 1.1
-    );
-  }
-
-  private movedUp(hand: Point[]): boolean {
-    if (!this.lastLeft && !this.lastRight) return false;
-    const last = this.lastLeft ?? this.lastRight;
-    if (!last) return false;
-    const currWrist = hand[0];
-    const lastWrist = last[0];
-    return currWrist && lastWrist && currWrist.y < lastWrist.y - 0.02;
-  }
-
-  private isNearFace(hand: Point[]): boolean {
-    const wrist = hand[0];
-    // Face landmarks are in upper portion of frame; wrist y < 0.4 is rough heuristic
-    return wrist && wrist.y < 0.4;
-  }
-
-  private wagging(hand: Point[]): boolean {
-    // Simplified: horizontal oscillation of index tip
-    if (!this.lastLeft && !this.lastRight) return false;
-    const last = this.lastLeft ?? this.lastRight;
-    if (!last) return false;
-    const currTip = hand[8];
-    const lastTip = last[8];
-    return currTip && lastTip && Math.abs(currTip.x - lastTip.x) > 0.03;
-  }
-
-  private isCircling(_hand: Point[]): boolean {
-    // Placeholder for circular motion detection
-    return false;
-  }
-
-  private dist(a: Point, b: Point): number {
-    const dx = a.x - b.x;
-    const dy = a.y - b.y;
-    const dz = a.z - b.z;
-    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const indexOut = dist3(hand[8], wrist) > dist3(hand[6], wrist) * 1.1;
+    const ringCurled = dist3(hand[16], wrist) < dist3(hand[14], wrist);
+    const pinkyCurled = dist3(hand[20], wrist) < dist3(hand[18], wrist);
+    return indexOut && ringCurled && pinkyCurled;
   }
 }
+
+function dist3(a: Point, b: Point): number {
+  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
+/** Pulls the face (mouth) and chest positions from a frame, if tracked. */
+function readBody(frame: Float32Array): BodyContext {
+  const face = readPart(frame, 'face');
+  const pose = readPart(frame, 'pose');
+  let faceP: Point | null = face?.[13] ?? null; // upper inner lip
+  if (!faceP && pose?.[0]) faceP = pose[0]; // nose
+  let chest: Point | null = null;
+  if (pose?.[11] && pose?.[12]) {
+    const l = pose[11];
+    const r = pose[12];
+    chest = { x: (l.x + r.x) / 2, y: (l.y + r.y) / 2 + 0.08, z: (l.z + r.z) / 2 };
+  }
+  const ok = (p: Point | null) => (p && Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null);
+  return { face: ok(faceP), chest: ok(chest) };
+}
+
+/** Frames without a fresh detection before the same word may be emitted again. */
+const REPEAT_COOLDOWN_FRAMES = 20;
 
 /**
  * MediaPipe-backed sign recognizer.
  * Subscribes to the frame bus, runs the classifier, emits SignEvents via callbacks.
  */
-class MediaPipeSignRecognizer implements SignRecognizer {
+export class MediaPipeSignRecognizer implements SignRecognizer {
   private classifier: SignClassifier;
   private config: SignRecognizerConfig;
   private unsubscribe: (() => void) | null = null;
-  private handlers: { onSign: (e: SignEvent) => void; onHands: (visible: boolean) => void } | null = null;
+  private handlers: RecognizerHandlers | null = null;
 
-  // Temporal smoothing state
   private candidate: SignEvent | null = null;
   private candidateFrames = 0;
-  private lastEmitted: SignEvent | null = null;
+  private lastWord: string | null = null;
+  private quietFrames = 0;
   private gapFrames = 0;
+  private pendingWords = false;
   private handsVisible = false;
 
   constructor(classifier: SignClassifier, config: SignRecognizerConfig = DEFAULT_CONFIG) {
@@ -255,119 +265,119 @@ class MediaPipeSignRecognizer implements SignRecognizer {
     this.config = config;
   }
 
-  start(
-    _video: HTMLVideoElement,
-    handlers: { onSign: (e: SignEvent) => void; onHands: (visible: boolean) => void }
-  ): void {
+  start(_video: HTMLVideoElement, handlers: RecognizerHandlers): void {
     this.handlers = handlers;
     this.classifier.reset();
     this.candidate = null;
     this.candidateFrames = 0;
-    this.lastEmitted = null;
+    this.lastWord = null;
+    this.quietFrames = 0;
     this.gapFrames = 0;
+    this.pendingWords = false;
     this.handsVisible = false;
-
-    this.unsubscribe = frameBus.subscribe((frame, _timestamp) => this.processFrame(frame));
+    this.unsubscribe?.();
+    this.unsubscribe = frameBus.subscribe((frame) => this.processFrame(frame));
   }
 
   stop(): void {
-    if (this.unsubscribe) {
-      this.unsubscribe();
-      this.unsubscribe = null;
-    }
+    this.unsubscribe?.();
+    this.unsubscribe = null;
     this.handlers = null;
     this.classifier.reset();
   }
 
-  private processFrame(frame: Float32Array): void {
+  /** Feed one frame directly (used by the frame bus and by tests). */
+  processFrame(frame: Float32Array): void {
     if (!this.handlers) return;
 
-    const leftHand = hasPart(frame, 'leftHand') ? readPart(frame, 'leftHand') : null;
-    const rightHand = hasPart(frame, 'rightHand') ? readPart(frame, 'rightHand') : null;
+    const leftHand = readPart(frame, 'leftHand');
+    const rightHand = readPart(frame, 'rightHand');
     const anyHands = !!leftHand || !!rightHand;
 
-    // Hand visibility callback
     if (anyHands !== this.handsVisible) {
       this.handsVisible = anyHands;
       this.handlers.onHands(anyHands);
     }
 
     if (!anyHands) {
-      this.gapFrames++;
-      if (this.gapFrames >= this.config.sentenceGapFrames && this.candidate) {
-        this.flushCandidate(true);
-      }
+      // Hands down: forget motion and allow the same sign again.
+      this.classifier.reset();
+      this.candidate = null;
+      this.candidateFrames = 0;
+      this.lastWord = null;
+      this.noDetection();
+      return;
+    }
+
+    const [primary, secondary] = this.selectHands(leftHand, rightHand);
+    const result = this.classifier.classify(primary, secondary, readBody(frame));
+
+    if (!result || result.confidence < this.config.minConfidence) {
+      this.candidate = null;
+      this.candidateFrames = 0;
+      this.noDetection();
+      return;
+    }
+
+    // Still the sign we just emitted: hold, don't repeat.
+    if (result.word === this.lastWord) {
+      this.quietFrames = 0;
+      this.gapFrames = 0;
       return;
     }
 
     this.gapFrames = 0;
-
-    // Select hand based on config
-    const [primary, secondary] = this.selectHands(leftHand, rightHand);
-    if (!primary) return;
-
-    // Classify
-    const result = this.classifier.classify(primary, secondary);
-    if (!result || result.confidence < this.config.minConfidence) {
-      // Low confidence or no detection — increment gap, maybe flush
-      this.gapFrames++;
-      if (this.gapFrames >= this.config.sentenceGapFrames && this.candidate) {
-        this.flushCandidate(true);
-      }
-      return;
-    }
-
-    // Temporal smoothing: require N consistent frames
-    if (this.candidate && this.sameSign(this.candidate, result)) {
+    if (this.candidate && this.candidate.word === result.word) {
       this.candidateFrames++;
-      // Update confidence to running max
       this.candidate = { ...this.candidate, confidence: Math.max(this.candidate.confidence, result.confidence) };
     } else {
-      // New sign or first detection
       this.candidate = result;
       this.candidateFrames = 1;
     }
 
-    // Emit when held long enough
-    if (this.candidateFrames >= this.config.minHoldFrames && this.candidate !== this.lastEmitted) {
-      this.flushCandidate(false);
+    if (this.candidateFrames >= this.config.minHoldFrames) this.emit();
+  }
+
+  private noDetection(): void {
+    this.quietFrames++;
+    this.gapFrames++;
+    if (this.quietFrames >= REPEAT_COOLDOWN_FRAMES) this.lastWord = null;
+    if (this.pendingWords && this.gapFrames >= this.config.sentenceGapFrames) {
+      this.pendingWords = false;
+      this.handlers?.onBoundary?.();
     }
+  }
+
+  private emit(): void {
+    if (!this.candidate || !this.handlers) return;
+    const event = this.candidate;
+    this.lastWord = event.word;
+    this.quietFrames = 0;
+    this.candidate = null;
+    this.candidateFrames = 0;
+    this.pendingWords = !event.endsSentence;
+    this.handlers.onSign(event);
   }
 
   private selectHands(left: Point[] | null, right: Point[] | null): [Point[] | null, Point[] | null] {
-    switch (this.config.preferredHand) {
-      case 'left':
-        return [left, right];
-      case 'right':
-        return [right, left];
-      case 'auto':
-      default: {
-        // Prefer hand with more visible landmarks
-        const leftScore = left ? this.visibilityScore(left) : 0;
-        const rightScore = right ? this.visibilityScore(right) : 0;
-        return leftScore >= rightScore ? [left, right] : [right, left];
-      }
-    }
+    if (this.config.preferredHand === 'left') return left ? [left, right] : [right, left];
+    if (this.config.preferredHand === 'right') return right ? [right, left] : [left, right];
+    return right ? [right, left] : [left, right];
   }
+}
 
-  private visibilityScore(hand: Point[]): number {
-    let sum = 0;
-    for (const p of hand) sum += Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z) ? 1 : 0;
-    return sum / hand.length;
-  }
+export interface BodyContext {
+  /** Mouth (or nose) position, if the face/pose is tracked. */
+  face: Point | null;
+  /** Upper-chest position, if the pose is tracked. */
+  chest: Point | null;
+}
 
-  private sameSign(a: SignEvent, b: SignEvent): boolean {
-    return a.word === b.word;
-  }
-
-  private flushCandidate(endsSentence: boolean): void {
-    if (!this.candidate || !this.handlers) return;
-    const event: SignEvent = { ...this.candidate, endsSentence };
-    this.handlers.onSign(event);
-    this.lastEmitted = this.candidate;
-    this.candidate = null;
-    this.candidateFrames = 0;
-  }
+export interface RecognizerHandlers {
+  onSign: (e: SignEvent) => void;
+  onHands: (visible: boolean) => void;
+  /** Called when a pause ends a sentence whose last sign didn't end it. */
+  onBoundary?: () => void;
 }
 
 /**
@@ -376,10 +386,7 @@ class MediaPipeSignRecognizer implements SignRecognizer {
  */
 export interface SignRecognizer {
   /** Start recognition. The video element is kept for API compatibility but not used for tracking. */
-  start(
-    video: HTMLVideoElement,
-    handlers: { onSign: (e: SignEvent) => void; onHands: (visible: boolean) => void }
-  ): void;
+  start(video: HTMLVideoElement, handlers: RecognizerHandlers): void;
   /** Stop recognition and release resources. */
   stop(): void;
 }
@@ -438,6 +445,12 @@ export function useSignRecognition({ video, active, onSentence }: Options) {
 
     r.start(video, {
       onHands: setHandsVisible,
+      onBoundary: () => {
+        if (buffer.length === 0) return;
+        sentenceCb.current(buffer.join(' '));
+        buffer = [];
+        clearTimer = setTimeout(() => setWords([]), 2600);
+      },
       onSign: (e) => {
         if (clearTimer !== null) {
           clearTimeout(clearTimer);

@@ -7,7 +7,7 @@ Visibu is not an ASL translator. It recognises a small set of signs taught by th
 ## Status
 
 - **Stage 0 (foundations):** done. The tracking check screen tests whether a device can track hands, face and body fast enough.
-- **Redesigned interface:** a calm, accessible UI for the conversation itself. Sign recognition is not connected to it yet (see below).
+- **Redesigned interface:** a calm, accessible UI for the conversation itself. A demo rule-based sign recogniser is connected to it (see below).
 
 ## Screens
 
@@ -47,7 +47,7 @@ npm run lint
 
 The **UI, hand tracking (MediaPipe), and speech-to-text (Web Speech API) pipelines are fully functional**. The Translate screen, camera setup, history, and accessibility features all work end-to-end.
 
-`createSignRecognizer()` in `src/lib/signRecognizer.ts` currently returns `null`, so the Translate screen shows one static example caption labelled "Example · not saved" (never added to the conversation or saved). The **gesture classification model interface is ready to be linked** — implement the `SignRecognizer` interface and return it from `createSignRecognizer()` to connect your classifier. The UI needs nothing else.
+`createSignRecognizer()` in `src/lib/signRecognizer.ts` returns a rule-based recogniser (`HeuristicSignClassifier`). It reads MediaPipe hand, face and pose landmarks over a short window and recognises five demo signs: HELLO (open hand rising or sweeping out), THANK YOU (flat hand from chin outwards), YES (fist nodding), NO (index and middle fingers wagging) and PLEASE (flat hand circling on the chest). A sign held or repeated is emitted only once. It is a demonstration, not a translator. To connect a trained model, implement `SignClassifier` and pass it to `MediaPipeSignRecognizer` in `createSignRecognizer()`. The UI needs nothing else.
 
 ## Accessibility
 
@@ -67,7 +67,7 @@ The **UI, hand tracking (MediaPipe), and speech-to-text (Web Speech API) pipelin
 
 - Hearing learners built and tested this prototype, and no Deaf users have tested it.
 - The tracker reads hands, face and body, but nothing in the app reads facial grammar yet.
-- Sign recognition is not yet connected to the Translate screen.
+- Sign recognition is rule-based and only knows HELLO, THANK YOU, YES, NO and PLEASE.
 - Accuracy figures will be added once they are measured.
 
 ## Credits
