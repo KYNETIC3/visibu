@@ -142,7 +142,7 @@ export function Setup({ camera }: { camera: ReturnType<typeof useCamera> }) {
               {step === 2 && (
                 <>
                   <p style={{ color: 'var(--ink-2)' }}>Sit an arm's length away. Keep your face and both hands inside the green box.</p>
-                  <p role="status" style={{ fontWeight: 700, color: camera.lighting === 'good' ? 'var(--ok-ink)' : camera.lighting === 'unknown' ? 'var(--muted)' : '#8f4209' }}>
+                  <p role="status" style={{ fontWeight: 700, color: camera.lighting === 'good' ? 'var(--ok-ink)' : camera.lighting === 'unknown' ? 'var(--muted)' : 'var(--warn-ink)' }}>
                     {live ? lightingTip : 'Turn on the camera in step 1 to check lighting.'}
                   </p>
                   <div className="tips">
