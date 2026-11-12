@@ -5,6 +5,7 @@ import { ROUTES, useRoute } from './lib/router';
 import { SettingsProvider, SIGN_LANGUAGES, useSettings } from './lib/settings';
 import { useCamera } from './lib/useCamera';
 import { History } from './screens/History';
+import { MySigns } from './screens/MySigns';
 import { Settings } from './screens/Settings';
 import { Setup } from './screens/Setup';
 import { TrackingCheck } from './screens/TrackingCheck';
@@ -36,7 +37,7 @@ function Shell() {
   // owns its own camera and tracker.
   const stopCamera = camera.stop;
   useEffect(() => {
-    if (route !== 'translate' && route !== 'setup') stopCamera();
+    if (route !== 'translate' && route !== 'setup' && route !== 'signs') stopCamera();
   }, [route, stopCamera]);
 
   const onAlert = useCallback(() => setGlowKey((k) => k + 1), []);
@@ -86,8 +87,8 @@ function Shell() {
       <Header route={route} end={headerEnd} />
 
       <p className="interpreter-notice" role="note">
-        Visibu is a student prototype. It recognises a small set of signs and does not replace a qualified ASL
-        interpreter.
+        Visibu is a student research prototype. Its sign translation is experimental and has not been tested with Deaf
+        signers. You check every message before it is shown. It does not replace a qualified ASL interpreter.
       </p>
 
       {route === 'translate' && !settings.setupDone && (
@@ -106,6 +107,7 @@ function Shell() {
       )}
 
       {route === 'translate' && <Translate camera={camera} onAlert={onAlert} setStatus={setStatus} />}
+      {route === 'signs' && <MySigns camera={camera} />}
       {route === 'setup' && <Setup camera={camera} />}
       {route === 'history' && <History />}
       {route === 'settings' && <Settings />}

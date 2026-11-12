@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 
-export type Route = 'translate' | 'setup' | 'history' | 'settings' | 'tracking'
+export type Route = 'translate' | 'signs' | 'setup' | 'history' | 'settings' | 'tracking'
 
 export const ROUTES: { id: Route; href: string; label: string; title: string }[] = [
   { id: 'translate', href: '#/', label: 'Translate', title: 'Live translate' },
+  { id: 'signs', href: '#/signs', label: 'My signs', title: 'My signs' },
   { id: 'history', href: '#/history', label: 'History', title: 'Conversation history' },
   { id: 'settings', href: '#/settings', label: 'Accessibility', title: 'Accessibility settings' },
   { id: 'setup', href: '#/setup', label: 'Camera setup', title: 'Camera setup' },

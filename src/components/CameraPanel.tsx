@@ -1,5 +1,5 @@
 import type { CameraStatus, Lighting } from '../lib/useCamera'
-import type { SignEvent } from '../lib/signRecognizer'
+import { HandOverlay } from './HandOverlay'
 import { Icon } from './Icon'
 
 interface Props {
@@ -12,10 +12,11 @@ interface Props {
   paused: boolean
   alert: boolean
   handsVisible: boolean | null
-  lastSign: SignEvent | null
-  showConfidence: boolean
-  showSign: boolean
+  /** What sign translation is doing, e.g. "Signing · 3 s". Null hides the overlay. */
+  signStatus: { title: string; detail: string } | null
   showFrame?: boolean
+  /** Draw the tracked hand points, coloured by finger. */
+  showHandPoints?: boolean
   onStart: () => void
 }
 
@@ -30,7 +31,6 @@ const EMPTY_COPY: Record<Exclude<CameraStatus, 'live'>, { title: string; body: s
 export function CameraPanel(p: Props) {
   const live = p.status === 'live'
   const empty = p.status === 'live' ? null : EMPTY_COPY[p.status]
-  const conf = p.lastSign ? Math.round(p.lastSign.confidence * 100) : 0
   const classes = ['camera', live && !p.paused && 'camera--live', p.alert && 'camera--alert'].filter(Boolean).join(' ')
 
   return (
@@ -64,6 +64,7 @@ export function CameraPanel(p: Props) {
       {live && (
         <>
           {p.showFrame && <div className="camera__frame" aria-hidden="true" />}
+          {p.showHandPoints && !p.paused && <HandOverlay mirror={p.mirror} />}
           <div className="camera__top">
             <span className="pill pill--dark">
               <span className={`dot${p.paused ? '' : ' pulse'}`} style={{ background: p.paused ? '#C9CCD1' : '#F26B5B' }} />
@@ -77,23 +78,12 @@ export function CameraPanel(p: Props) {
             )}
           </div>
 
-          {p.showSign && (
+          {p.signStatus && (
             <div className="camera__sign" aria-live="off">
               <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-                <div className="eyebrow">Sign recognised</div>
-                <div className="sign-word">{p.lastSign ? p.lastSign.word.replace(/[^\p{L}']/gu, '').toUpperCase() : 'Ready'}</div>
+                <div className="eyebrow">{p.signStatus.title}</div>
+                <div className="sign-word">{p.signStatus.detail}</div>
               </div>
-              {p.showConfidence && (
-                <div style={{ flex: '0 0 132px' }}>
-                  <div className="row row--between" style={{ fontSize: 14, gap: 4 }}>
-                    <span>Sure</span>
-                    <strong>{conf}%</strong>
-                  </div>
-                  <div className="meter" role="meter" aria-label="Recognition confidence" aria-valuemin={0} aria-valuemax={100} aria-valuenow={conf}>
-                    <div className="meter__fill" style={{ width: `${conf}%` }} />
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </>

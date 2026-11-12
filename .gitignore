@@ -7,3 +7,15 @@ dist/
 .DS_Store
 # Copied or downloaded by `npm run assets`
 public/mediapipe/
+# Sign translation models are trained from How2Sign (CC BY-NC 4.0) and are
+# installed locally by ml/export/export_onnx.py --install; not committed.
+public/models/
+# ML: environment, How2Sign data and anything derived from it
+ml/.venv/
+ml/datasets/
+ml/checkpoints/
+ml/exports/
+ml/reports/eval_*.json
+__pycache__/
+.pytest_cache/
+tsconfig.tsbuildinfo

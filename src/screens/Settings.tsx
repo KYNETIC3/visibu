@@ -57,6 +57,35 @@ export function Settings() {
           <SwitchRow title="Save conversations" description="Keep transcripts on this device to read later." checked={settings.saveHistory} onChange={(v) => set({ saveHistory: v })} />
         </section>
 
+        <section className="card card--lift" aria-labelledby="h-sign">
+          <h2 id="h-sign" className="card__title" style={{ fontSize: 20 }}>
+            Sign translation
+          </h2>
+          <p className="card__hint" style={{ marginBottom: 4 }}>
+            You always check a translation before it is shown to your partner.
+          </p>
+          <SwitchRow
+            title="Show suggestions"
+            description="Up to three possible translations to choose from, when Visibu is unsure."
+            checked={settings.signSuggestions}
+            onChange={(v) => set({ signSuggestions: v })}
+          />
+          {settings.signSuggestions && (
+            <SwitchRow
+              title="Choose a suggestion by signing 1, 2 or 3"
+              description="Hold the number up for about a second. It only fills in the text; you still accept the message."
+              checked={settings.pickBySign}
+              onChange={(v) => set({ pickBySign: v })}
+            />
+          )}
+          <SwitchRow
+            title="Show hand points on the camera"
+            description="Coloured dots on each finger (thumb, index, middle, ring, pinky) show what Visibu is tracking."
+            checked={settings.showHandPoints}
+            onChange={(v) => set({ showHandPoints: v })}
+          />
+        </section>
+
         <section className="card card--lift" aria-labelledby="h-alert">
           <h2 id="h-alert" className="card__title" style={{ fontSize: 20 }}>
             Visual alerts

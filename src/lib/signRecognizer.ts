@@ -1,479 +1,407 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { readPart, type Point } from '../tracking/frame';
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { TARGET_FPS } from '../ml/features'
+import { DEFAULT_SEGMENTER, handsIn, MessageSegmenter, type SegmenterConfig } from '../ml/segmenter'
+import type { FromTranslator, ModelInfo, Suggestion, ToTranslator, TranslationResult } from '../ml/messages'
+import { bestMatch, unitFingerprint, usable, type MySign } from '../ml/mySigns'
 
 /**
- * A single recognised sign with confidence and sentence-boundary flag.
- */
-export interface SignEvent {
-  /** English word or phrase for the recognised sign. */
-  word: string;
-  /** 0–1 confidence. */
-  confidence: number;
-  /** True when this sign ends a sentence (pause, or a sentence-final sign). */
-  endsSentence: boolean;
-}
-
-/**
- * Interface for a sign language classifier.
- * Implement this to plug in a real ML model (e.g., TensorFlow.js, ONNX, MediaPipe custom model).
- */
-export interface SignClassifier {
-  /**
-   * Classify a single frame's hand landmarks.
-   * Called once per frame; implementations may keep motion history.
-   * @param primary   21 landmarks of the dominant hand, or null
-   * @param secondary 21 landmarks of the other hand, or null
-   * @param body      face / chest positions, when tracked
-   * @returns Recognised sign or null if no sign detected in this frame
-   */
-  classify(primary: Point[] | null, secondary: Point[] | null, body?: BodyContext): SignEvent | null;
-
-  /** Reset any internal temporal state (e.g., between sentences). */
-  reset(): void;
-
-  /** Optional: warm-up / model loading. Returns true when ready. */
-  init?(): Promise<boolean>;
-}
-
-/**
- * Configuration for the MediaPipe-backed sign recognizer.
- */
-export interface SignRecognizerConfig {
-  /** Minimum confidence to emit a sign event. */
-  minConfidence: number;
-  /** Frames a sign must persist before being emitted (temporal smoothing). */
-  minHoldFrames: number;
-  /** Frames of no-hand / low-confidence before a sentence boundary is emitted. */
-  sentenceGapFrames: number;
-  /** Whether to prefer left or right hand for one-handed signs. 'auto' = dominant hand by visibility. */
-  preferredHand: 'left' | 'right' | 'auto';
-}
-
-/** Default recognizer configuration. */
-export const DEFAULT_CONFIG: SignRecognizerConfig = {
-  minConfidence: 0.65,
-  minHoldFrames: 3,
-  sentenceGapFrames: 15,
-  preferredHand: 'auto',
-};
-
-/**
- * Simple event bus for MediaPipe frames.
- * Allows the tracker (wherever it lives) to push frames without direct coupling.
+ * Simple event bus for MediaPipe frames, so the tracker and the recogniser are
+ * not coupled. useTracker publishes every tracked frame here.
  */
 class FrameBus {
-  private subscribers = new Set<(frame: Float32Array, timestamp: number) => void>();
+  private subscribers = new Set<(frame: Float32Array, timestamp: number) => void>()
 
-  /** Subscribe to frames. Returns an unsubscribe function. */
   subscribe(fn: (frame: Float32Array, timestamp: number) => void): () => void {
-    this.subscribers.add(fn);
-    return () => this.subscribers.delete(fn);
+    this.subscribers.add(fn)
+    return () => this.subscribers.delete(fn)
   }
 
-  /** Publish a frame to all subscribers. */
   publish(frame: Float32Array, timestamp: number): void {
-    for (const fn of this.subscribers) fn(frame, timestamp);
+    for (const fn of this.subscribers) fn(frame, timestamp)
   }
 
-  /** Clear all subscribers (for testing / disposal). */
   clear(): void {
-    this.subscribers.clear();
+    this.subscribers.clear()
   }
 }
 
-/** Singleton frame bus. The tracker should call `frameBus.publish(frame, timestamp)` on each result. */
-export const frameBus = new FrameBus();
+export const frameBus = new FrameBus()
 
-/** Frames of hand history the heuristic classifier looks back over. */
-const HISTORY = 15;
-/** Minimum frames of history before any motion-based sign can fire. */
-const MIN_MOTION_FRAMES = 8;
-/** Per-frame movement below this is treated as tracking jitter. */
-const JITTER = 0.004;
-
-interface Sample {
-  wrist: Point;
-  tip: Point;
+/** A machine translation of one signed message, waiting for the signer to approve, edit or reject it. */
+export interface SignProposal {
+  id: number
+  /** Proposed English. Never shown to the partner until the signer approves it. */
+  text: string
+  /** Mean token probability from the model, 0..1. A model score, not a measured accuracy. */
+  confidence: number
+  lowConfidence: boolean
+  /** Up to 3 distinct suggestions, best first (the first is `text`). The signer may pick one. */
+  suggestions: (Suggestion & { lowConfidence: boolean })[]
+  /** The word model's fingerprint of the clip (raw, uncentred), or null without the word model. */
+  embedding: Float32Array | null
+  /** Glosses from the CTC head. Empty unless the model was trained on gloss annotations. */
+  glosses: string[]
+  durationMs: number
+  latencyMs: number
+  model: ModelInfo
 }
 
-const dist2 = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
+export type RecognizerStatus =
+  | { state: 'loading' }
+  | { state: 'ready'; model: ModelInfo }
+  | { state: 'unavailable'; reason: string }
+  | { state: 'error'; reason: string }
 
-/** Counts direction reversals along one axis, ignoring jitter. */
-function reversals(values: number[]): number {
-  let flips = 0;
-  let lastSign = 0;
-  for (let i = 1; i < values.length; i++) {
-    const d = values[i] - values[i - 1];
-    if (Math.abs(d) < JITTER) continue;
-    const s = Math.sign(d);
-    if (lastSign !== 0 && s !== lastSign) flips++;
-    lastSign = s;
-  }
-  return flips;
+/** What the recogniser is doing right now. */
+export type Activity = 'waiting' | 'signing' | 'translating'
+
+export interface RecognizerHandlers {
+  onHands: (visible: boolean) => void
+  onActivity: (activity: Activity) => void
+  onProposal: (proposal: SignProposal) => void
+  /** Signing was too short to translate, or the model produced no words. */
+  onNothing?: (reason: 'too-short' | 'empty') => void
+  onError?: (message: string) => void
+  /** True if a finished stretch of signing was a control gesture (e.g. holding up 1, 2 or 3 to choose), not a message. */
+  isControlGesture?: (frames: Float32Array[]) => boolean
+  /** Capture mode (teaching a sign): each finished stretch of signing goes here instead of being translated. */
+  onCapture?: (frames: Float32Array[]) => void
 }
 
-const range = (values: number[]) => Math.max(...values) - Math.min(...values);
+export interface Fingerprint {
+  embedding: Float32Array | null
+  signs: { label: string; prob: number }[]
+}
+
+export interface SignRecognizer {
+  /** Load the model (once). Status changes are reported to `onStatus`. */
+  load(onStatus: (s: RecognizerStatus) => void): void
+  /** Start listening to tracked frames. The video element supplies the aspect ratio. */
+  start(video: HTMLVideoElement, handlers: RecognizerHandlers): void
+  /** End the current message now and translate it. */
+  finish(): void
+  /** Fingerprint one captured stretch of signing with the word model. */
+  fingerprint(frames: Float32Array[]): Promise<Fingerprint>
+  /** Stop listening and drop any message in progress. Late results are ignored. */
+  stop(): void
+  /** Stop and release the model. */
+  dispose(): void
+}
+
+/** Below this model score a proposal is flagged as low confidence. */
+export const LOW_CONFIDENCE = 0.5
 
 /**
- * Heuristic-based sign classifier (reference implementation).
- * Recognises a tiny vocabulary from hand shape + motion over a short window.
- * DEMONSTRATION ONLY — replace with a trained model by implementing SignClassifier.
+ * Continuous sign translation: tracked frames -> one landmark sequence per
+ * message -> ONNX encoder + decoder in a Web Worker -> proposed English text.
  */
-export class HeuristicSignClassifier implements SignClassifier {
-  private history: Sample[] = [];
+export class OnnxSignRecognizer implements SignRecognizer {
+  private worker: Worker | null = null
+  private status: RecognizerStatus = { state: 'loading' }
+  private onStatus: ((s: RecognizerStatus) => void) | null = null
+  private handlers: RecognizerHandlers | null = null
+  private video: HTMLVideoElement | null = null
+  private unsubscribe: (() => void) | null = null
+  private segmenter: MessageSegmenter
+  private handsVisible = false
+  private nextId = 1
+  private pending = new Map<number, { durationMs: number }>()
+  private generation = 0
+  private pendingGeneration = new Map<number, number>()
+  private fingerprints = new Map<number, { resolve: (f: Fingerprint) => void; reject: (e: Error) => void }>()
 
-  classify(primary: Point[] | null, _secondary: Point[] | null, body?: BodyContext): SignEvent | null {
-    if (!primary || !primary[0] || !primary[8]) return null;
+  constructor(
+    private createWorker: () => Worker = () =>
+      new Worker(new URL('../ml/translator.worker.ts', import.meta.url), { type: 'module' }),
+    config: SegmenterConfig = DEFAULT_SEGMENTER,
+  ) {
+    this.segmenter = new MessageSegmenter(config)
+  }
 
-    this.history.push({ wrist: primary[0], tip: primary[8] });
-    if (this.history.length > HISTORY) this.history.shift();
-    if (this.history.length < MIN_MOTION_FRAMES) return null;
-
-    const wristX = this.history.map((s) => s.wrist.x);
-    const wristY = this.history.map((s) => s.wrist.y);
-    const tipX = this.history.map((s) => s.tip.x);
-    const first = this.history[0];
-    const last = this.history[this.history.length - 1];
-
-    const open = this.isOpenHand(primary);
-    const fist = this.isFist(primary);
-    const pointing = this.isPointing(primary);
-
-    // NO: index (and middle) finger snapping side to side.
-    if (pointing && range(tipX) > 0.03 && reversals(tipX) >= 2) {
-      return { word: 'NO', confidence: 0.75, endsSentence: true };
+  load(onStatus: (s: RecognizerStatus) => void): void {
+    this.onStatus = onStatus
+    onStatus(this.status)
+    if (this.worker) return
+    try {
+      this.worker = this.createWorker()
+    } catch (err) {
+      this.setStatus({ state: 'error', reason: `Could not start the translator: ${String(err)}` })
+      return
     }
-
-    // YES: fist nodding up and down.
-    if (fist && range(wristY) > 0.03 && reversals(wristY) >= 2) {
-      return { word: 'YES', confidence: 0.75, endsSentence: true };
-    }
-
-    if (!open) return null;
-
-    // THANK YOU: flat hand starts at the chin and moves forward/down, away from the face.
-    const startedAtFace = body?.face
-      ? dist2(first.tip, body.face) < 0.12
-      : first.tip.y < 0.35;
-    const movedAway = body?.face
-      ? dist2(last.tip, body.face) - dist2(first.tip, body.face) > 0.08
-      : last.tip.y - first.tip.y > 0.06;
-    if (startedAtFace && movedAway) {
-      return { word: 'THANK YOU', confidence: 0.78, endsSentence: true };
-    }
-
-    // PLEASE: flat hand circling on the chest.
-    const nearChest = body?.chest ? dist2(last.wrist, body.chest) < 0.2 : last.wrist.y > 0.45;
-    const circling =
-      range(wristX) > 0.04 &&
-      range(wristY) > 0.04 &&
-      reversals(wristX) >= 1 &&
-      reversals(wristY) >= 1 &&
-      dist2(first.wrist, last.wrist) < Math.max(range(wristX), range(wristY)) * 0.6;
-    if (nearChest && circling) {
-      return { word: 'PLEASE', confidence: 0.7, endsSentence: false };
-    }
-
-    // HELLO: open hand moving up, or out sideways, in one sweep.
-    const rise = first.wrist.y - last.wrist.y;
-    const sweep = Math.abs(last.wrist.x - first.wrist.x);
-    if ((rise > 0.06 || sweep > 0.08) && reversals(wristY) === 0) {
-      return { word: 'HELLO', confidence: 0.8, endsSentence: true };
-    }
-
-    return null;
+    this.worker.onmessage = (e: MessageEvent<FromTranslator>) => this.handle(e.data)
+    this.worker.onerror = (e) => this.setStatus({ state: 'error', reason: e.message || 'Translator crashed' })
+    this.send({ type: 'init', baseUrl: import.meta.env.BASE_URL })
   }
 
-  reset(): void {
-    this.history = [];
-  }
-
-  private isOpenHand(hand: Point[]): boolean {
-    const wrist = hand[0];
-    const tips = [8, 12, 16, 20];
-    const pips = [6, 10, 14, 18];
-    let extended = 0;
-    for (let i = 0; i < tips.length; i++) {
-      if (dist3(hand[tips[i]], wrist) > dist3(hand[pips[i]], wrist) * 1.1) extended++;
-    }
-    return extended >= 4;
-  }
-
-  private isFist(hand: Point[]): boolean {
-    const wrist = hand[0];
-    const tips = [8, 12, 16, 20];
-    const pips = [6, 10, 14, 18];
-    let curled = 0;
-    for (let i = 0; i < tips.length; i++) {
-      if (dist3(hand[tips[i]], wrist) < dist3(hand[pips[i]], wrist)) curled++;
-    }
-    return curled >= 4;
-  }
-
-  private isPointing(hand: Point[]): boolean {
-    const wrist = hand[0];
-    const indexOut = dist3(hand[8], wrist) > dist3(hand[6], wrist) * 1.1;
-    const ringCurled = dist3(hand[16], wrist) < dist3(hand[14], wrist);
-    const pinkyCurled = dist3(hand[20], wrist) < dist3(hand[18], wrist);
-    return indexOut && ringCurled && pinkyCurled;
-  }
-}
-
-function dist3(a: Point, b: Point): number {
-  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
-}
-
-/** Pulls the face (mouth) and chest positions from a frame, if tracked. */
-function readBody(frame: Float32Array): BodyContext {
-  const face = readPart(frame, 'face');
-  const pose = readPart(frame, 'pose');
-  let faceP: Point | null = face?.[13] ?? null; // upper inner lip
-  if (!faceP && pose?.[0]) faceP = pose[0]; // nose
-  let chest: Point | null = null;
-  if (pose?.[11] && pose?.[12]) {
-    const l = pose[11];
-    const r = pose[12];
-    chest = { x: (l.x + r.x) / 2, y: (l.y + r.y) / 2 + 0.08, z: (l.z + r.z) / 2 };
-  }
-  const ok = (p: Point | null) => (p && Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null);
-  return { face: ok(faceP), chest: ok(chest) };
-}
-
-/** Frames without a fresh detection before the same word may be emitted again. */
-const REPEAT_COOLDOWN_FRAMES = 20;
-
-/**
- * MediaPipe-backed sign recognizer.
- * Subscribes to the frame bus, runs the classifier, emits SignEvents via callbacks.
- */
-export class MediaPipeSignRecognizer implements SignRecognizer {
-  private classifier: SignClassifier;
-  private config: SignRecognizerConfig;
-  private unsubscribe: (() => void) | null = null;
-  private handlers: RecognizerHandlers | null = null;
-
-  private candidate: SignEvent | null = null;
-  private candidateFrames = 0;
-  private lastWord: string | null = null;
-  private quietFrames = 0;
-  private gapFrames = 0;
-  private pendingWords = false;
-  private handsVisible = false;
-
-  constructor(classifier: SignClassifier, config: SignRecognizerConfig = DEFAULT_CONFIG) {
-    this.classifier = classifier;
-    this.config = config;
-  }
-
-  start(_video: HTMLVideoElement, handlers: RecognizerHandlers): void {
-    this.handlers = handlers;
-    this.classifier.reset();
-    this.candidate = null;
-    this.candidateFrames = 0;
-    this.lastWord = null;
-    this.quietFrames = 0;
-    this.gapFrames = 0;
-    this.pendingWords = false;
-    this.handsVisible = false;
-    this.unsubscribe?.();
-    this.unsubscribe = frameBus.subscribe((frame) => this.processFrame(frame));
-  }
-
-  stop(): void {
-    this.unsubscribe?.();
-    this.unsubscribe = null;
-    this.handlers = null;
-    this.classifier.reset();
+  start(video: HTMLVideoElement, handlers: RecognizerHandlers): void {
+    this.stop()
+    this.video = video
+    this.handlers = handlers
+    this.handsVisible = false
+    this.unsubscribe = frameBus.subscribe((frame, ts) => this.processFrame(frame, ts))
+    handlers.onActivity('waiting')
   }
 
   /** Feed one frame directly (used by the frame bus and by tests). */
-  processFrame(frame: Float32Array): void {
-    if (!this.handlers) return;
-
-    const leftHand = readPart(frame, 'leftHand');
-    const rightHand = readPart(frame, 'rightHand');
-    const anyHands = !!leftHand || !!rightHand;
-
-    if (anyHands !== this.handsVisible) {
-      this.handsVisible = anyHands;
-      this.handlers.onHands(anyHands);
+  processFrame(frame: Float32Array, timestamp: number): void {
+    if (!this.handlers) return
+    const hands = handsIn(frame)
+    if (hands !== this.handsVisible) {
+      this.handsVisible = hands
+      this.handlers.onHands(hands)
     }
+    // Without a model there is nothing to translate; keep reporting hands only.
+    if (this.status.state !== 'ready') return
+    for (const ev of this.segmenter.push(frame, timestamp)) this.onSegmentEvent(ev)
+  }
 
-    if (!anyHands) {
-      // Hands down: forget motion and allow the same sign again.
-      this.classifier.reset();
-      this.candidate = null;
-      this.candidateFrames = 0;
-      this.lastWord = null;
-      this.noDetection();
-      return;
-    }
+  finish(): void {
+    for (const ev of this.segmenter.finish()) this.onSegmentEvent(ev)
+  }
 
-    const [primary, secondary] = this.selectHands(leftHand, rightHand);
-    const result = this.classifier.classify(primary, secondary, readBody(frame));
+  fingerprint(frames: Float32Array[]): Promise<Fingerprint> {
+    if (this.status.state !== 'ready' || frames.length === 0) return Promise.reject(new Error('The sign model is not ready.'))
+    const { packed, count } = pack(frames)
+    const id = this.nextId++
+    return new Promise((resolve, reject) => {
+      this.fingerprints.set(id, { resolve, reject })
+      this.send({ type: 'fingerprint', id, frames: packed, count, aspect: this.aspect() }, [packed.buffer])
+    })
+  }
 
-    if (!result || result.confidence < this.config.minConfidence) {
-      this.candidate = null;
-      this.candidateFrames = 0;
-      this.noDetection();
-      return;
-    }
+  private aspect(): number {
+    const v = this.video
+    return v && v.videoWidth > 0 && v.videoHeight > 0 ? v.videoWidth / v.videoHeight : 16 / 9
+  }
 
-    // Still the sign we just emitted: hold, don't repeat.
-    if (result.word === this.lastWord) {
-      this.quietFrames = 0;
-      this.gapFrames = 0;
-      return;
-    }
+  stop(): void {
+    this.unsubscribe?.()
+    this.unsubscribe = null
+    this.handlers = null
+    this.segmenter.reset()
+    this.generation++
+  }
 
-    this.gapFrames = 0;
-    if (this.candidate && this.candidate.word === result.word) {
-      this.candidateFrames++;
-      this.candidate = { ...this.candidate, confidence: Math.max(this.candidate.confidence, result.confidence) };
+  dispose(): void {
+    this.stop()
+    this.worker?.terminate()
+    this.worker = null
+    this.status = { state: 'loading' }
+  }
+
+  private onSegmentEvent(ev: ReturnType<MessageSegmenter['finish']>[number]) {
+    if (!this.handlers) return
+    if (ev.type === 'started') {
+      this.handlers.onActivity('signing')
+    } else if (ev.type === 'discarded') {
+      this.handlers.onActivity('waiting')
+      this.handlers.onNothing?.('too-short')
+    } else if (this.handlers.onCapture) {
+      this.handlers.onActivity('waiting')
+      this.handlers.onCapture(ev.frames)
+    } else if (this.handlers.isControlGesture?.(ev.frames)) {
+      this.handlers.onActivity('waiting')
     } else {
-      this.candidate = result;
-      this.candidateFrames = 1;
-    }
-
-    if (this.candidateFrames >= this.config.minHoldFrames) this.emit();
-  }
-
-  private noDetection(): void {
-    this.quietFrames++;
-    this.gapFrames++;
-    if (this.quietFrames >= REPEAT_COOLDOWN_FRAMES) this.lastWord = null;
-    if (this.pendingWords && this.gapFrames >= this.config.sentenceGapFrames) {
-      this.pendingWords = false;
-      this.handlers?.onBoundary?.();
+      const { packed, count } = pack(ev.frames)
+      const id = this.nextId++
+      this.pending.set(id, { durationMs: ev.durationMs })
+      this.pendingGeneration.set(id, this.generation)
+      this.handlers.onActivity('translating')
+      this.send({ type: 'translate', id, frames: packed, count, aspect: this.aspect() }, [packed.buffer])
     }
   }
 
-  private emit(): void {
-    if (!this.candidate || !this.handlers) return;
-    const event = this.candidate;
-    this.lastWord = event.word;
-    this.quietFrames = 0;
-    this.candidate = null;
-    this.candidateFrames = 0;
-    this.pendingWords = !event.endsSentence;
-    this.handlers.onSign(event);
+  private handle(msg: FromTranslator) {
+    switch (msg.type) {
+      case 'ready':
+        this.setStatus({ state: 'ready', model: msg.model })
+        break
+      case 'unavailable':
+        this.setStatus({ state: 'unavailable', reason: msg.reason })
+        break
+      case 'fingerprint': {
+        const w = this.fingerprints.get(msg.id)
+        this.fingerprints.delete(msg.id)
+        w?.resolve({ embedding: msg.embedding, signs: msg.signs })
+        break
+      }
+      case 'error':
+        if (msg.id === undefined) this.setStatus({ state: 'error', reason: msg.message })
+        else if (this.fingerprints.has(msg.id)) {
+          this.fingerprints.get(msg.id)!.reject(new Error(msg.message))
+          this.fingerprints.delete(msg.id)
+        } else {
+          const current = this.takePending(msg.id)
+          if (current) {
+            this.handlers?.onActivity('waiting')
+            this.handlers?.onError?.(msg.message)
+          }
+        }
+        break
+      case 'result':
+        this.onResult(msg.result)
+        break
+    }
   }
 
-  private selectHands(left: Point[] | null, right: Point[] | null): [Point[] | null, Point[] | null] {
-    if (this.config.preferredHand === 'left') return left ? [left, right] : [right, left];
-    if (this.config.preferredHand === 'right') return right ? [right, left] : [left, right];
-    return right ? [right, left] : [left, right];
+  /** Returns the pending entry if it belongs to the current start() session. */
+  private takePending(id: number) {
+    const entry = this.pending.get(id)
+    const gen = this.pendingGeneration.get(id)
+    this.pending.delete(id)
+    this.pendingGeneration.delete(id)
+    return entry && gen === this.generation ? entry : null
+  }
+
+  private onResult(r: TranslationResult) {
+    const entry = this.takePending(r.id)
+    if (!entry || !this.handlers || this.status.state !== 'ready') return
+    this.handlers.onActivity('waiting')
+    if (!r.text.trim()) {
+      this.handlers.onNothing?.('empty')
+      return
+    }
+    const model = this.status.model
+    this.handlers.onProposal({
+      id: r.id,
+      text: r.text,
+      confidence: r.confidence,
+      lowConfidence: r.confidence < LOW_CONFIDENCE,
+      suggestions: r.suggestions.map((s) => ({ ...s, lowConfidence: s.confidence < LOW_CONFIDENCE })),
+      embedding: r.embedding,
+      glosses: model.ctcTargets === 'gloss' ? r.ctcTokens : [],
+      durationMs: entry.durationMs,
+      latencyMs: r.latencyMs,
+      model,
+    })
+  }
+
+  private setStatus(s: RecognizerStatus) {
+    this.status = s
+    this.onStatus?.(s)
+  }
+
+  private send(msg: ToTranslator, transfer: Transferable[] = []) {
+    this.worker?.postMessage(msg, transfer)
   }
 }
 
-export interface BodyContext {
-  /** Mouth (or nose) position, if the face/pose is tracked. */
-  face: Point | null;
-  /** Upper-chest position, if the pose is tracked. */
-  chest: Point | null;
-}
-
-export interface RecognizerHandlers {
-  onSign: (e: SignEvent) => void;
-  onHands: (visible: boolean) => void;
-  /** Called when a pause ends a sentence whose last sign didn't end it. */
-  onBoundary?: () => void;
+function pack(frames: Float32Array[]) {
+  const count = frames.length
+  const frameLen = frames[0].length
+  const packed = new Float32Array(count * frameLen)
+  frames.forEach((f, i) => packed.set(f, i * frameLen))
+  return { packed, count }
 }
 
 /**
- * Public interface for a sign recognizer.
- * Consumes pre-computed MediaPipe frames via the frame bus.
+ * Puts the user's own sign first when a translation matches one of them
+ * (same fingerprint, at or above the model's threshold). Otherwise unchanged.
  */
-export interface SignRecognizer {
-  /** Start recognition. The video element is kept for API compatibility but not used for tracking. */
-  start(video: HTMLVideoElement, handlers: RecognizerHandlers): void;
-  /** Stop recognition and release resources. */
-  stop(): void;
+export function withMySign(p: SignProposal, signs: MySign[]): SignProposal {
+  const words = p.model.words
+  if (!p.embedding || !words?.matching) return p
+  const match = bestMatch(unitFingerprint(p.embedding, words.matching.mean), usable(signs, words.version), words.matching.threshold)
+  if (!match) return p
+  const mine = { text: match.sign.meaning, confidence: Math.max(0, match.score), lowConfidence: false, source: 'mine' as const, sign: match.sign.meaning }
+  const rest = p.suggestions.filter((s) => s.text.trim().toLowerCase() !== mine.text.trim().toLowerCase())
+  return { ...p, text: mine.text, confidence: mine.confidence, lowConfidence: false, suggestions: [mine, ...rest].slice(0, 3) }
 }
 
-/**
- * Factory for the sign recognizer.
- * Returns a MediaPipe-backed recognizer wired to the frame bus.
- * The tracker (wherever it runs) MUST call `frameBus.publish(frame, timestamp)` for this to work.
- */
+/** The app's sign recogniser: the trained ONNX translation model. */
 export function createSignRecognizer(): SignRecognizer {
-  const classifier = new HeuristicSignClassifier();
-  return new MediaPipeSignRecognizer(classifier, DEFAULT_CONFIG);
+  return new OnnxSignRecognizer()
 }
 
-/** Shown in place of live sign captions until a model is connected. Never saved. */
-export const EXAMPLE_SIGN_CAPTION = 'Hello, I would like to book an appointment for Thursday.';
+/** Shown in place of live sign captions when no model is installed. Never saved. */
+export const EXAMPLE_SIGN_CAPTION = 'Hello, I would like to book an appointment for Thursday.'
 
 interface Options {
-  video: HTMLVideoElement | null;
-  active: boolean;
-  onSentence: (text: string) => void;
+  video: HTMLVideoElement | null
+  active: boolean
+  /** The user's own signs; a translation that matches one shows its meaning first. */
+  mySigns?: MySign[]
+  /** Teaching mode: finished stretches of signing go here instead of being translated. */
+  onCapture?: (frames: Float32Array[]) => void
 }
 
-export function useSignRecognition({ video, active, onSentence }: Options) {
-  const [words, setWords] = useState<string[]>([]);
-  const [lastSign, setLastSign] = useState<SignEvent | null>(null);
-  const [handsVisible, setHandsVisible] = useState<boolean | null>(null);
-  const [modelConnected, setModelConnected] = useState(false);
-  const sentenceCb = useRef(onSentence);
-  const recognizerRef = useRef<SignRecognizer | null>(null);
+/** A short stretch of signing around a pick-by-sign is that pick, not a message. */
+const PICK_SLACK_MS = 2500
+/** Longer stretches are kept even if a pick happened during them: a message is never dropped. */
+const PICK_MAX_MS = 3500
+
+/** At most this many translations wait for review; the oldest is dropped beyond it. */
+export const MAX_PENDING = 6
+
+export function useSignRecognition({ video, active, mySigns, onCapture }: Options) {
+  const [status, setStatus] = useState<RecognizerStatus>({ state: 'loading' })
+  const [handsVisible, setHandsVisible] = useState<boolean | null>(null)
+  const [activity, setActivity] = useState<Activity>('waiting')
+  // Translations waiting for the signer, oldest first. Signing continues while they wait.
+  const [proposals, setProposals] = useState<SignProposal[]>([])
+  const [notice, setNotice] = useState<string | null>(null)
+  const recognizerRef = useRef<SignRecognizer | null>(null)
+  // When the signer last chose a suggestion by holding up 1, 2 or 3.
+  const lastPickRef = useRef(-Infinity)
+  const mySignsRef = useRef(mySigns ?? [])
+  const captureRef = useRef(onCapture)
+  useEffect(() => {
+    mySignsRef.current = mySigns ?? []
+    captureRef.current = onCapture
+  }, [mySigns, onCapture])
+  const capturing = onCapture !== undefined
+
+  // One recogniser (and one model load) for the life of the screen.
+  useEffect(() => {
+    const r = createSignRecognizer()
+    recognizerRef.current = r
+    r.load(setStatus)
+    return () => {
+      r.dispose()
+      recognizerRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
-    sentenceCb.current = onSentence;
-  }, [onSentence]);
-
-  useEffect(() => {
-    if (!video) return;
-
-    // Create recognizer on first mount
-    if (!recognizerRef.current) {
-      recognizerRef.current = createSignRecognizer();
-      setModelConnected(true);
+    const r = recognizerRef.current
+    if (!r || !video || !active) {
+      setHandsVisible(null)
+      setActivity('waiting')
+      return
     }
-
-    const r = recognizerRef.current;
-    if (!active) {
-      r.stop();
-      setHandsVisible(null);
-      setWords([]);
-      setLastSign(null);
-      return;
-    }
-
-    let buffer: string[] = [];
-    let clearTimer: ReturnType<typeof setTimeout> | null = null;
-
     r.start(video, {
       onHands: setHandsVisible,
-      onBoundary: () => {
-        if (buffer.length === 0) return;
-        sentenceCb.current(buffer.join(' '));
-        buffer = [];
-        clearTimer = setTimeout(() => setWords([]), 2600);
+      onActivity: setActivity,
+      onProposal: (p) => {
+        setNotice(null)
+        setProposals((list) => [...list, withMySign(p, mySignsRef.current)].slice(-MAX_PENDING))
       },
-      onSign: (e) => {
-        if (clearTimer !== null) {
-          clearTimeout(clearTimer);
-          clearTimer = null;
-        }
-        setLastSign(e);
-        buffer = [...buffer, e.word];
-        setWords(buffer);
-        if (e.endsSentence) {
-          sentenceCb.current(buffer.join(' '));
-          buffer = [];
-          clearTimer = setTimeout(() => setWords([]), 2600);
-        }
+      onCapture: capturing ? (frames) => captureRef.current?.(frames) : undefined,
+      onNothing: (reason) =>
+        setNotice(reason === 'too-short' ? 'That was too short to translate. Sign, then lower your hands.' : 'No words were recognised. Please try again or type your message.'),
+      onError: (message) => setNotice(message),
+      // Holding up a number to choose also looks like signing; drop that stretch.
+      isControlGesture: (frames) => {
+        const ms = (frames.length / TARGET_FPS) * 1000
+        return ms <= PICK_MAX_MS && performance.now() - lastPickRef.current < ms + PICK_SLACK_MS
       },
-    });
+    })
+    return () => r.stop()
+  }, [active, video, capturing])
 
-    return () => {
-      r.stop();
-      if (clearTimer !== null) clearTimeout(clearTimer);
-    };
-  }, [active, video]);
+  const finish = useCallback(() => recognizerRef.current?.finish(), [])
+  /** Remove reviewed (accepted or discarded) translations. */
+  const resolve = useCallback((ids: number[]) => setProposals((list) => list.filter((p) => !ids.includes(p.id))), [])
+  const clearNotice = useCallback(() => setNotice(null), [])
+  /** Call when a suggestion was chosen by holding up a number, so that stretch is not translated. */
+  const notePick = useCallback(() => {
+    lastPickRef.current = performance.now()
+  }, [])
 
-  const clear = useCallback(() => setWords([]), []);
+  const fingerprint = useCallback((frames: Float32Array[]) => {
+    const r = recognizerRef.current
+    return r ? r.fingerprint(frames) : Promise.reject(new Error('The sign model is not loaded.'))
+  }, [])
 
-  return { words, lastSign, handsVisible, modelConnected, clear };
+  return { status, handsVisible, activity, proposals, notice, finish, resolve, clearNotice, notePick, fingerprint }
 }
