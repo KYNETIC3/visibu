@@ -1,0 +1,77 @@
+{
+  "name": "visibu-slt",
+  "version": "20261112",
+  "stage": "research",
+  "feature_version": 1,
+  "feature_dim": 786,
+  "fps": 15,
+  "min_frames": 8,
+  "max_frames": 450,
+  "max_tokens": 60,
+  "decoding": {
+    "beam": 4,
+    "n_best": 3,
+    "no_repeat_ngram": 3
+  },
+  "special_ids": {
+    "pad": 0,
+    "bos": 1,
+    "eos": 2,
+    "unk": 3,
+    "ctc_blank": 0
+  },
+  "ctc_targets": "english-words",
+  "model": {
+    "in_dim": 786,
+    "vocab_size": 7608,
+    "d_model": 256,
+    "enc_layers": 6,
+    "dec_layers": 3,
+    "heads": 4,
+    "ff": 1024,
+    "dropout": 0.1,
+    "subsample": 2
+  },
+  "training": {
+    "train_manifest": "train",
+    "val_manifest": "val",
+    "train_examples": 29547,
+    "val_examples": 1718
+  },
+  "evaluation": {
+    "split": "val",
+    "examples": 1713,
+    "translation": {
+      "bleu": 3.18,
+      "bleu_precisions_1to4": [
+        25.88,
+        4.87,
+        1.61,
+        0.51
+      ],
+      "chrf": 20.43,
+      "rougeL_f": 15.66,
+      "word_error_rate": 1.0702
+    },
+    "ctc_head": {
+      "wer": 0.9589,
+      "targets": "English words (auxiliary diagnostic, not sign recognition accuracy)"
+    }
+  },
+  "dataset": "How2Sign (https://how2sign.github.io), re-aligned English translations, front-view clips",
+  "licence": "Weights are derived from How2Sign, licensed CC BY-NC 4.0. Non-commercial research use only.",
+  "files": {
+    "encoder.onnx": {
+      "sha256": "5cff9c8681845748f90c6cbd495910f374eeca15d520c119dc97c62dab877503",
+      "bytes": 29569079
+    },
+    "decoder.onnx": {
+      "sha256": "5a9422ca8fd648ab8820baf112a41400c89e2d37267b229fa8d5d41a9cf612f3",
+      "bytes": 21126508
+    },
+    "vocab.json": {
+      "sha256": "d761edde4d003d8036bc3f70531ef14fe73d3b46144996c51114f3599b79accd",
+      "bytes": 79963
+    }
+  }
+}

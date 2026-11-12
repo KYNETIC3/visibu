@@ -38,6 +38,9 @@ def build_args(argv=None):
     ap.add_argument("--val-manifest", default="val")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--init-model", type=Path,
+                    help="start from a whole trained sentence model (e.g. trained/slt-how2sign/model.pt) to fine-tune it; "
+                         "--prepared must use that model's vocab.json")
     ap.add_argument("--init-encoder", type=Path,
                     help="start the sign encoder from a pretrain_signs.py checkpoint (its feature statistics too)")
     ap.add_argument("--device", default="auto", choices=["auto", "mps", "cuda", "cpu"])
@@ -154,7 +157,17 @@ def main(argv=None) -> None:
                        dec_layers=args.dec_layers, heads=args.heads, ff=args.ff, dropout=args.dropout)
     model = SLTModel(mcfg)
     model.encoder.set_stats(stats["mean"], stats["std"])
-    if args.init_encoder and not (args.resume and (args.out / "last.pt").exists()):
+    fresh = not (args.resume and (args.out / "last.pt").exists())
+    if args.init_model and fresh:
+        pre = torch.load(args.init_model, map_location="cpu", weights_only=False)
+        if pre["meta"]["feature_version"] != FEATURE_VERSION:
+            sys.exit("The model to fine-tune uses a different feature version.")
+        if pre["config"]["vocab_size"] != len(vocab):
+            sys.exit(f"--init-model has a {pre['config']['vocab_size']}-word vocabulary but --prepared has {len(vocab)}. "
+                     "Copy the model's vocab.json into the prepared folder.")
+        model.load_state_dict(pre["model"], strict=True)  # includes the feature statistics it was trained with
+        log({"event": "init_model", "from": str(args.init_model)})
+    elif args.init_encoder and fresh:
         pre = torch.load(args.init_encoder, map_location="cpu", weights_only=False)
         if pre["meta"]["feature_version"] != FEATURE_VERSION:
             sys.exit("The pre-trained encoder uses a different feature version.")
@@ -185,7 +198,7 @@ def main(argv=None) -> None:
     meta = {"model": mcfg.to_dict(), "feature_version": FEATURE_VERSION, "target_fps": TARGET_FPS,
             "train_manifest": args.train_manifest, "val_manifest": args.val_manifest,
             "train_examples": len(train_rows), "val_examples": len(val_rows), "skipped_long": skipped_long,
-            "ctc_source": args.ctc_source, "init_encoder": str(args.init_encoder) if args.init_encoder else None, "args": {k: str(v) for k, v in vars(args).items()}, "params": n_params,
+            "ctc_source": args.ctc_source, "init_encoder": str(args.init_encoder) if args.init_encoder else None, "init_model": str(args.init_model) if args.init_model else None, "args": {k: str(v) for k, v in vars(args).items()}, "params": n_params,
             "device": str(device), "torch": torch.__version__}
     (args.out / "run_config.json").write_text(json.dumps(meta, indent=2))
     log({"event": "start", "device": str(device), "params": n_params, "train": len(train_rows),

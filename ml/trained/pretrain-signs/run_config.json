@@ -1,0 +1,59 @@
+{
+  "feature_version": 1,
+  "encoder": {
+    "in_dim": 786,
+    "d_model": 256,
+    "enc_layers": 6,
+    "heads": 4,
+    "ff": 1024,
+    "subsample": 2
+  },
+  "train": 74941,
+  "val": 7879,
+  "train_participants": [
+    "22343",
+    "25571",
+    "26734",
+    "27610",
+    "28656",
+    "29302",
+    "30680",
+    "32319",
+    "34503",
+    "36257",
+    "37055",
+    "37779",
+    "49445",
+    "53618",
+    "55372",
+    "61333",
+    "62590"
+  ],
+  "val_participants": [
+    "2044",
+    "4718"
+  ],
+  "dataset": "Kaggle asl-signs (Google Isolated Sign Language Recognition, PopSign)",
+  "args": {
+    "data": "/tmp/asl-signs",
+    "out": "/kaggle/working/pretrain-signs",
+    "device": "cuda",
+    "seed": "13",
+    "epochs": "40",
+    "batch_size": "64",
+    "d_model": "256",
+    "enc_layers": "6",
+    "heads": "4",
+    "ff": "1024",
+    "dropout": "0.2",
+    "lr": "0.001",
+    "weight_decay": "0.05",
+    "label_smoothing": "0.1",
+    "patience": "6",
+    "workers": "4",
+    "limit_train": "0",
+    "resume": "False",
+    "hours": "10.63",
+    "evaluate_test": "False"
+  }
+}

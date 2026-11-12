@@ -162,7 +162,15 @@ def main() -> None:
     assert diff < 1e-4
 
     (args.out / "labels.json").write_text(json.dumps(labels))
-    matching = calibrate(wrapped, args.calibrate)
+    if (args.calibrate / "train.jsonl").exists() and (args.calibrate / "val.jsonl").exists():
+        matching = calibrate(wrapped, args.calibrate)
+    elif (APP_DIR / "manifest.json").exists() and json.loads((APP_DIR / "manifest.json").read_text()).get("matching"):
+        # No How2Sign data here: keep the threshold measured before. The centring vector only
+        # depends on the encoder, so re-measure it whenever the encoder itself was retrained.
+        matching = json.loads((APP_DIR / "manifest.json").read_text())["matching"]
+        print("No How2Sign data for calibration: reusing the installed model's matching values.")
+    else:
+        sys.exit(f"Need prepared How2Sign data in {args.calibrate} to calibrate sign matching (see ml/README.md).")
     print("matching", json.dumps({k: v for k, v in matching.items() if k != "mean"}))
     test = None
     log = run / "train_log.jsonl"

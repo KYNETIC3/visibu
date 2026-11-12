@@ -270,7 +270,7 @@ This is a fixed control gesture, like a button, not sign recognition, and no mod
   - No CDN, and nothing is fetched from another origin.
   - The existing Content Security Policy already allows all of this (`'wasm-unsafe-eval'`, `connect-src 'self'`), so `vercel.json` is unchanged.
 - **Missing model.** If `/models/visibu-slt/manifest.json` is absent, the app says sign translation is unavailable. Typed messages, quick replies and speech captions keep working.
-- **Model files are not committed** (`public/models/` is git-ignored) because they derive from non-commercial data. Install them with `export_onnx.py --install` on the machine that builds the app.
+- **Model files are committed** in `public/models/` (licences in `public/models/README.md`), with weights-only PyTorch checkpoints in `ml/trained/` for re-exporting and fine-tuning. Fine-tune with `train_slt.py --init-model`, and replace the app's copy with `--install`.
 
 ## Blockers
 

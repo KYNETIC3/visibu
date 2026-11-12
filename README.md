@@ -4,11 +4,17 @@ A browser prototype for coffee counter conversations between a Deaf ASL signer a
 
 Visibu is a research prototype, not a finished ASL translator. The signer signs a whole message and an on-device model proposes an English sentence. The signer approves, edits or discards it, and only approved text is shown to the barista. The barista's speech comes back as live captions. It does not replace a qualified ASL interpreter.
 
+**New here? Start with [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md):** setup, every feature step by step, and troubleshooting.
+
 ## Status
 
 - **Stage 0 (foundations):** done. The tracking check screen tests whether a device can track hands, face and body fast enough.
 - **Redesigned interface:** a calm, accessible UI for the conversation itself.
-- **Sign translation (research):** the rule-based five-sign demo has been replaced. In its place: a continuous sign-to-English pipeline (Transformer encoder with a CTC head, plus a Transformer decoder), trained in Python on How2Sign and run in the browser with ONNX Runtime Web. The pipeline is built and tested end to end, but **no usable model has been trained yet**. See [ml/README.md](ml/README.md).
+- **Sign translation (research):** the rule-based five-sign demo has been replaced. In its place: a continuous sign-to-English pipeline (Transformer encoder with a CTC head, plus a Transformer decoder), trained in Python on How2Sign and run in the browser with ONNX Runtime Web. Two research models are trained:
+  - a 250-sign word model (test top-1 61%, top-5 80% on unseen signers);
+  - a sentence model on the full How2Sign set (val BLEU 3.18, still early).
+
+  Signers can also teach their own signs in **My signs**. See [ml/README.md](ml/README.md).
 
 ## Screens
 
@@ -70,7 +76,7 @@ The **UI, hand tracking (MediaPipe) and speech-to-text (Web Speech API) pipeline
    - A new clip matches a taught sign when the cosine similarity to the average of its takes is at least the threshold in the model's manifest (0.42). That threshold was set so 1% of different-sign pairs pass, on simulated repeats (augmented How2Sign clips); real repeats vary more.
    - Signs taught with a different word-model version are flagged for re-recording.
 
-Models are not committed, because they derive from How2Sign (CC BY-NC 4.0). Train and install one with the commands in [ml/README.md](ml/README.md); `--install` puts it in `public/models/visibu-slt/`. Without a model, the Translate screen says sign translation is unavailable, and typed messages, quick replies and speech captions keep working.
+The trained models are committed in `public/models/` (licences in [public/models/README.md](public/models/README.md); the How2Sign sentence model is CC BY-NC 4.0, non-commercial), so a clone works without extra downloads. Weights-only training checkpoints are in [ml/trained/](ml/trained/README.md); to retrain or fine-tune, see [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md#12-change-or-retrain-the-models). If the model files are missing, the Translate screen says sign translation is unavailable, and typed messages, quick replies and speech captions keep working.
 
 ## Accessibility
 
