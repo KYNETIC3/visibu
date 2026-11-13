@@ -61,6 +61,43 @@ const paths: Record<string, ReactElement> = {
   ),
   chevron: <path d="m5 7 4 4 4-4" />,
   send: <path d="M3 9h11M10 5l4 4-4 4" />,
+  arrowUp: <path d="M9 15V3M4 8l5-5 5 5" />,
+  gear: (
+    <>
+      <circle cx="9" cy="9" r="2.4" />
+      <path d="M9 1.8v2M9 14.2v2M1.8 9h2M14.2 9h2M3.9 3.9l1.4 1.4M12.7 12.7l1.4 1.4M3.9 14.1l1.4-1.4M12.7 5.3l1.4-1.4" />
+      <circle cx="9" cy="9" r="5.2" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="9" cy="9" r="7" />
+      <path d="M9 5v4l2.5 1.6" />
+    </>
+  ),
+  bookmark: <path d="M13.5 15.5 9 12.2l-4.5 3.3V3.8A1.3 1.3 0 0 1 5.8 2.5h6.4a1.3 1.3 0 0 1 1.3 1.3Z" />,
+  bubble: <path d="M15.5 11a1.5 1.5 0 0 1-1.5 1.5H6l-3.5 3V4A1.5 1.5 0 0 1 4 2.5h10A1.5 1.5 0 0 1 15.5 4Z" />,
+  pencil: <path d="M9.5 15h6M12.3 2.7a1.6 1.6 0 0 1 2.3 2.3L5.5 14.1l-3 .8.8-3Z" />,
+  chevronRight: <path d="m7 4 5 5-5 5" />,
+  chevronLeft: <path d="m11 4-5 5 5 5" />,
+  sun: (
+    <>
+      <circle cx="9" cy="9" r="3" />
+      <path d="M9 1.5v1.5M9 15v1.5M1.5 9H3M15 9h1.5M3.7 3.7l1 1M13.3 13.3l1 1M3.7 14.3l1-1M13.3 4.7l1-1" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="3.5" y="8" width="11" height="8" rx="2" />
+      <path d="M6 8V5.5a3 3 0 0 1 6 0V8" />
+    </>
+  ),
+  person: (
+    <>
+      <circle cx="9" cy="6" r="3" />
+      <path d="M3 16v-.5A4.5 4.5 0 0 1 7.5 11h3a4.5 4.5 0 0 1 4.5 4.5v.5" />
+    </>
+  ),
 }
 
 export type IconName = keyof typeof paths

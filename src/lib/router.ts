@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 
 export type Route = 'translate' | 'signs' | 'setup' | 'history' | 'settings' | 'tracking'
 
-export const ROUTES: { id: Route; href: string; label: string; title: string }[] = [
-  { id: 'translate', href: '#/', label: 'Translate', title: 'Live translate' },
-  { id: 'signs', href: '#/signs', label: 'My signs', title: 'My signs' },
-  { id: 'history', href: '#/history', label: 'History', title: 'Conversation history' },
-  { id: 'settings', href: '#/settings', label: 'Accessibility', title: 'Accessibility settings' },
-  { id: 'setup', href: '#/setup', label: 'Camera setup', title: 'Camera setup' },
-  { id: 'tracking', href: '#/tracking', label: 'Tracking check', title: 'Tracking check' },
+/** `tab` routes appear in the main tab bar; the rest are reached from Settings. */
+export const ROUTES: { id: Route; href: string; label: string; title: string; tab: boolean }[] = [
+  { id: 'translate', href: '#/', label: 'Translate', title: 'Translate', tab: true },
+  { id: 'signs', href: '#/signs', label: 'My signs', title: 'My signs', tab: true },
+  { id: 'history', href: '#/history', label: 'History', title: 'History', tab: true },
+  { id: 'settings', href: '#/settings', label: 'Settings', title: 'Settings', tab: false },
+  { id: 'setup', href: '#/setup', label: 'Camera setup', title: 'Camera setup', tab: false },
+  { id: 'tracking', href: '#/tracking', label: 'Tracking check', title: 'Tracking check', tab: false },
 ]
 
 function parse(hash: string): Route {

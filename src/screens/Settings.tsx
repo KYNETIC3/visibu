@@ -1,167 +1,159 @@
-import { useEffect, useRef, useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { Icon } from '../components/Icon'
 import { SwitchRow } from '../components/Switch'
-import { DEFAULT_SETTINGS, SIGN_LANGUAGES, THEMES, usePrefersLessMotion, useSettings, type Settings as S, type SignLanguage } from '../lib/settings'
+import { ConfirmDialog } from '../components/Sheet'
+import { navigate } from '../lib/router'
+import { DEFAULT_SETTINGS, SIGN_LANGUAGES, TEXT_SCALE, THEMES, useSettings, type Settings as S, type SignLanguage } from '../lib/settings'
+
+function Group({ label, foot, children }: { label: string; foot?: string; children: ReactNode }) {
+  const id = useId()
+  return (
+    <section className="group" aria-labelledby={id}>
+      <h2 id={id} className="group__label">
+        {label}
+      </h2>
+      <div className="inset">{children}</div>
+      {foot && <p className="group__foot">{foot}</p>}
+    </section>
+  )
+}
+
+function LinkCell({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a className="cell" href={href}>
+      <span className="cell__main">{children}</span>
+      <span className="cell__chev">
+        <Icon name="chevronRight" size={16} strokeWidth={2.2} />
+      </span>
+    </a>
+  )
+}
 
 export function Settings() {
   const { settings, update } = useSettings()
-  const lessMotion = usePrefersLessMotion()
-  const [saved, setSaved] = useState(false)
-  const timer = useRef<number | undefined>(undefined)
-
-  useEffect(() => () => window.clearTimeout(timer.current), [])
-
-  const set = (patch: Partial<S>) => {
-    update(patch)
-    setSaved(true)
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => setSaved(false), 1800)
-  }
+  const [confirmReset, setConfirmReset] = useState(false)
+  const set = (patch: Partial<S>) => update(patch)
+  const scale = settings.textScale || 1
+  const scaleLabel = Math.abs(scale - 1) < 0.01 ? 'Default' : `${Math.round(scale * 100)}%`
 
   return (
-    <main id="main" className="page split" tabIndex={-1}>
-      <div className="split__main">
-        <div className="row row--between" style={{ alignItems: 'flex-end' }}>
-          <div>
-            <h1 className="page-title">Accessibility</h1>
-            <p className="page-sub">Make Visibu comfortable to read and impossible to miss. Changes save automatically.</p>
+    <main id="main" className="narrow" tabIndex={-1}>
+      <h1 className="large-title">Settings</h1>
+
+      <Group label="Appearance">
+        <div className="cell cell--block">
+          <div role="group" aria-label="Appearance" className="segmented segmented--full">
+            {THEMES.map((t) => (
+              <button key={t.id} type="button" className="segmented__btn" aria-pressed={settings.theme === t.id} onClick={() => set({ theme: t.id })}>
+                {t.label}
+              </button>
+            ))}
           </div>
-          <span role="status" aria-live="polite">
-            {saved && (
-              <span className="pill pill--ok toast">
-                <Icon name="check" size={14} strokeWidth={2} /> Saved
-              </span>
-            )}
-          </span>
         </div>
-
-        <section className="card card--lift" aria-labelledby="h-cap">
-          <h2 id="h-cap" className="card__title" style={{ fontSize: 20, marginBottom: 8 }}>
-            Captions
-          </h2>
-          <div className="field" style={{ padding: '4px 0 14px' }}>
-            <div className="row row--between">
-              <label htmlFor="cap-size" style={{ fontWeight: 700 }}>
-                Caption text size
-              </label>
-              <span style={{ fontWeight: 700, color: 'var(--you-ink)' }}>{settings.captionSize} px</span>
-            </div>
-            <input id="cap-size" className="range" type="range" min={24} max={72} step={2} value={settings.captionSize} onChange={(e) => set({ captionSize: Number(e.target.value) })} />
-            <div className="row row--between card__hint" style={{ fontSize: 14 }}>
-              <span>Smaller</span>
-              <span>Larger</span>
-            </div>
+        <div className="cell cell--block">
+          <div className="row row--between">
+            <label htmlFor="text-size">Text size</label>
+            <span className="cell__sub">{scaleLabel}</span>
           </div>
-          <SwitchRow title="Show who is talking" description="A label and icon on every caption, not only colour." checked={settings.showSpeaker} onChange={(v) => set({ showSpeaker: v })} />
-          <SwitchRow title="Show recognition confidence" description="See how sure Visibu is about each sign." checked={settings.showConfidence} onChange={(v) => set({ showConfidence: v })} />
-          <SwitchRow title="Save conversations" description="Keep transcripts on this device to read later." checked={settings.saveHistory} onChange={(v) => set({ saveHistory: v })} />
-        </section>
-
-        <section className="card card--lift" aria-labelledby="h-sign">
-          <h2 id="h-sign" className="card__title" style={{ fontSize: 20 }}>
-            Sign translation
-          </h2>
-          <p className="card__hint" style={{ marginBottom: 4 }}>
-            You always check a translation before it is shown to your partner.
-          </p>
-          <SwitchRow
-            title="Show suggestions"
-            description="Up to three possible translations to choose from, when Visibu is unsure."
-            checked={settings.signSuggestions}
-            onChange={(v) => set({ signSuggestions: v })}
-          />
-          {settings.signSuggestions && (
-            <SwitchRow
-              title="Choose a suggestion by signing 1, 2 or 3"
-              description="Hold the number up for about a second. It only fills in the text; you still accept the message."
-              checked={settings.pickBySign}
-              onChange={(v) => set({ pickBySign: v })}
-            />
-          )}
-          <SwitchRow
-            title="Show hand points on the camera"
-            description="Coloured dots on each finger (thumb, index, middle, ring, pinky) show what Visibu is tracking."
-            checked={settings.showHandPoints}
-            onChange={(v) => set({ showHandPoints: v })}
-          />
-        </section>
-
-        <section className="card card--lift" aria-labelledby="h-alert">
-          <h2 id="h-alert" className="card__title" style={{ fontSize: 20 }}>
-            Visual alerts
-          </h2>
-          <p className="card__hint" style={{ marginBottom: 4 }}>
-            Sound is replaced by things you can see and feel.
-          </p>
-          <SwitchRow title="Glow when someone starts speaking" description="A soft glow around the screen and the caption area." checked={settings.flashOnSpeech} onChange={(v) => set({ flashOnSpeech: v })} />
-          <SwitchRow title="Glow when your hands leave the frame" description="So you know when signs are not being read." checked={settings.glowWhenHandsLeave} onChange={(v) => set({ glowWhenHandsLeave: v })} />
-          <SwitchRow title="Vibrate on new messages" description="On phones and tablets that support it." checked={settings.vibrate} onChange={(v) => set({ vibrate: v })} />
-        </section>
-
-        <section className="card card--lift" aria-labelledby="h-disp">
-          <h2 id="h-disp" className="card__title" style={{ fontSize: 20 }}>
-            Display and motion
-          </h2>
-          <div className="opt" style={{ flexWrap: 'wrap' }}>
-            <div className="opt__body">
-              <div id="theme-label" className="opt__title">
-                Theme
-              </div>
-              <div className="opt__desc">Dark reduces glare in dim rooms.</div>
-            </div>
-            <div role="group" aria-labelledby="theme-label" className="row" style={{ gap: 8 }}>
-              {THEMES.map((t) => (
-                <button key={t.id} type="button" className="chip" aria-pressed={settings.theme === t.id} onClick={() => set({ theme: t.id })}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <SwitchRow title="High contrast captions" description="White text on black, stronger borders everywhere." checked={settings.highContrast} onChange={(v) => set({ highContrast: v })} />
-          <SwitchRow title="Reduce motion" description="Turn off animations. Visibu also follows your device setting." checked={settings.reduceMotion} onChange={(v) => set({ reduceMotion: v })} />
-          <SwitchRow title="Mirror camera view" description="Show your camera like a mirror." checked={settings.mirrorCamera} onChange={(v) => set({ mirrorCamera: v })} />
-          <div className="opt">
-            <label htmlFor="sign-lang" className="opt__title" style={{ flex: '1 1 auto' }}>
-              Sign language
-            </label>
-            <select id="sign-lang" className="select" style={{ background: 'var(--surface)' }} value={settings.signLanguage} onChange={(e) => set({ signLanguage: e.target.value as SignLanguage })}>
-              {SIGN_LANGUAGES.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </section>
-
-        <div>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              if (window.confirm('Reset all accessibility settings to their defaults?')) set({ ...DEFAULT_SETTINGS, setupDone: settings.setupDone })
-            }}
-          >
-            Reset to defaults
-          </button>
-        </div>
-      </div>
-
-      <aside aria-label="Caption preview" className="split__side" style={{ position: 'sticky', top: 24 }}>
-        <h2 className="eyebrow" style={{ fontSize: 15, color: 'var(--ink-2)' }}>
-          Preview
-        </h2>
-        <div className={`preview${settings.flashOnSpeech && !lessMotion ? ' preview--flash' : ''}`}>
-          {settings.showSpeaker && (
-            <span className="pill pill--partner" style={{ alignSelf: 'flex-start', height: 32, fontSize: 14 }}>
-              <Icon name="mic" size={14} strokeWidth={1.8} /> Partner · speaking
+          <div className="text-size">
+            <span aria-hidden="true" style={{ fontSize: 14, fontWeight: 600 }}>
+              A
             </span>
-          )}
-          <p style={{ fontSize: settings.captionSize, lineHeight: 1.2, fontWeight: 600, letterSpacing: '-0.01em', overflowWrap: 'anywhere' }}>Would morning or afternoon work better for you?</p>
-          {settings.showConfidence && <p style={{ fontSize: 15, opacity: 0.85 }}>Recognition confidence: 94%</p>}
+            <input
+              id="text-size"
+              className="range"
+              type="range"
+              min={TEXT_SCALE.min}
+              max={TEXT_SCALE.max}
+              step={TEXT_SCALE.step}
+              value={scale}
+              aria-valuetext={scaleLabel}
+              onChange={(e) => set({ textScale: Math.round(Number(e.target.value) * 10) / 10 })}
+            />
+            <span aria-hidden="true" style={{ fontSize: 24, fontWeight: 600 }}>
+              A
+            </span>
+          </div>
         </div>
-        <p className="card__hint">This is how captions look on the Translate screen.</p>
-      </aside>
+        <SwitchRow title="Reduce motion" description="Turns off animations. Visibu also follows your device setting." checked={settings.reduceMotion} onChange={(v) => set({ reduceMotion: v })} />
+        <SwitchRow title="High contrast" description="Stronger text and borders." checked={settings.highContrast} onChange={(v) => set({ highContrast: v })} />
+      </Group>
+
+      <Group label="Captions">
+        <div className="cell cell--block">
+          <div className="row row--between">
+            <label htmlFor="cap-size">Caption size</label>
+            <span className="cell__sub">{settings.captionSize} px</span>
+          </div>
+          <input id="cap-size" className="range" type="range" min={24} max={72} step={2} value={settings.captionSize} onChange={(e) => set({ captionSize: Number(e.target.value) })} />
+        </div>
+        <SwitchRow title="Save conversations" description="Kept on this device only, in History." checked={settings.saveHistory} onChange={(v) => set({ saveHistory: v })} />
+      </Group>
+
+      <Group label="Sign translation" foot="You always check a translation before your partner sees it.">
+        <SwitchRow title="Show other ways to say it" description="Up to three translations to choose from." checked={settings.signSuggestions} onChange={(v) => set({ signSuggestions: v })} />
+        {settings.signSuggestions && (
+          <SwitchRow title="Pick by signing 1, 2 or 3" description="Hold the number up for about a second." checked={settings.pickBySign} onChange={(v) => set({ pickBySign: v })} />
+        )}
+        <SwitchRow title="Show hand points" description="Coloured dots on each finger show what Visibu tracks." checked={settings.showHandPoints} onChange={(v) => set({ showHandPoints: v })} />
+        <SwitchRow title="Show technical details" description="Confidence, recognised sign and gloss." checked={settings.showConfidence} onChange={(v) => set({ showConfidence: v })} />
+        <div className="cell">
+          <label htmlFor="sign-lang" className="cell__main">
+            Sign language
+          </label>
+          <select id="sign-lang" className="select" value={settings.signLanguage} onChange={(e) => set({ signLanguage: e.target.value as SignLanguage })}>
+            {SIGN_LANGUAGES.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </Group>
+
+      <Group label="Visual alerts" foot="Sound is replaced by things you can see and feel.">
+        <SwitchRow title="Glow when someone speaks" checked={settings.flashOnSpeech} onChange={(v) => set({ flashOnSpeech: v })} />
+        <SwitchRow title="Glow when your hands leave the frame" checked={settings.glowWhenHandsLeave} onChange={(v) => set({ glowWhenHandsLeave: v })} />
+        <SwitchRow title="Vibrate on new messages" description="On phones and tablets that support it." checked={settings.vibrate} onChange={(v) => set({ vibrate: v })} />
+      </Group>
+
+      <Group label="Camera">
+        <SwitchRow title="Mirror camera" checked={settings.mirrorCamera} onChange={(v) => set({ mirrorCamera: v })} />
+        <LinkCell href="#/setup">Camera setup</LinkCell>
+        <LinkCell href="#/tracking">Tracking check</LinkCell>
+      </Group>
+
+      <Group
+        label="About"
+        foot="Visibu is a student research prototype. Sign translation is experimental and has not been tested with Deaf signers. It does not replace a qualified ASL interpreter."
+      >
+        <button
+          type="button"
+          className="cell cell--link"
+          onClick={() => {
+            set({ welcomeSeen: false })
+            navigate('translate')
+          }}
+        >
+          Show the welcome again
+        </button>
+        <button type="button" className="cell cell--danger" onClick={() => setConfirmReset(true)}>
+          Reset all settings
+        </button>
+      </Group>
+
+      {confirmReset && (
+        <ConfirmDialog
+          title="Reset all settings?"
+          message="Appearance, text size, captions and alerts go back to their defaults. Your conversations are kept."
+          confirmLabel="Reset"
+          onConfirm={() => {
+            set({ ...DEFAULT_SETTINGS, setupDone: settings.setupDone, welcomeSeen: settings.welcomeSeen })
+            setConfirmReset(false)
+          }}
+          onCancel={() => setConfirmReset(false)}
+        />
+      )}
     </main>
   )
 }

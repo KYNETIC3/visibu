@@ -7,8 +7,10 @@ import { Icon } from './Icon'
 interface Props {
   /** Translations waiting for review, oldest first. Signing continues while they wait. */
   proposals: SignProposal[]
-  /** One-line status, e.g. "Ready. Sign a word or a sentence, then lower your hands." */
+  /** Short status above the text, e.g. "Ready" or "Translating". */
   status: string
+  /** Large hint shown while nothing is waiting, e.g. "Sign your message, then lower your hands." */
+  hint: string
   activity: Activity | 'off'
   notice: string | null
   onDone: () => void
@@ -73,18 +75,18 @@ export function SignPanel(p: Props) {
   }
 
   return (
-    <section className="card signpanel" aria-labelledby={`${id}-h`}>
+    <section className="signpanel" aria-labelledby={`${id}-h`}>
       <header className="signpanel__head">
-        <span className={`signbar__dot signbar__dot--${p.activity}`} aria-hidden="true" />
+        <span className={`tcard__dot tcard__dot--${count > 0 ? 'ready' : p.activity}`} aria-hidden="true" />
         <div className="signpanel__status">
           <h2 id={`${id}-h`} className="signpanel__title">
-            {p.status}
+            {count > 1 ? `Check your translations (${count})` : count === 1 ? 'Check your translation' : p.status}
           </h2>
           {p.notice && <p className="signpanel__notice">{p.notice}</p>}
         </div>
         {p.activity === 'signing' && (
-          <button type="button" className="btn btn--primary btn--sm" onClick={p.onDone}>
-            <Icon name="check" size={18} /> Done
+          <button type="button" className="btn btn--sm" onClick={p.onDone}>
+            <Icon name="check" size={18} /> Done signing
           </button>
         )}
       </header>
@@ -95,13 +97,8 @@ export function SignPanel(p: Props) {
         </p>
       )}
 
-      <div className="signpanel__bar">
-        <span className="field__label">To check{count > 0 && <span className="signpanel__count">{count}</span>}</span>
-        <span className="signpanel__hint">Not sent until you accept</span>
-      </div>
-
       {count === 0 ? (
-        <p className="signpanel__empty">Translations appear here as you sign. Keep going; they wait for you.</p>
+        <p className="signpanel__empty">{p.hint}</p>
       ) : (
         <ol ref={listRef} className="pending" aria-label="Translations to check">
           {proposals.map((sp, i) =>
@@ -147,10 +144,10 @@ export function SignPanel(p: Props) {
           </p>
           <div className="signpanel__foot-actions">
             <button type="button" className="btn btn--primary btn--sm" onClick={() => accept(proposals)} disabled={!merged}>
-              <Icon name="check" size={18} /> Send all {count} as one
+              <Icon name="check" size={18} /> Show all {count} as one
             </button>
             <button type="button" className="btn btn--sm" onClick={() => p.onDiscard(proposals.map((sp) => sp.id))}>
-              Clear
+              Discard all
             </button>
           </div>
         </footer>
@@ -166,11 +163,11 @@ export function SignPanel(p: Props) {
 function ItemActions({ index, disabled, onAccept, onDiscard }: { index: number; disabled: boolean; onAccept: () => void; onDiscard: () => void }) {
   return (
     <span className="pending__actions">
-      <button type="button" className="btn btn--primary btn--sm" onClick={onAccept} disabled={disabled} aria-label={`Accept translation ${index + 1} and show partner`}>
-        <Icon name="check" size={18} /> Accept
+      <button type="button" className="btn btn--primary btn--sm" onClick={onAccept} disabled={disabled} aria-label={`Show translation ${index + 1} to your partner`}>
+        <Icon name="check" size={18} /> Show to partner
       </button>
       <button type="button" className="btn btn--sm btn--icon" onClick={onDiscard} aria-label={`Discard translation ${index + 1}`}>
-        <Icon name="close" size={18} />
+        <Icon name="trash" size={18} />
       </button>
     </span>
   )
@@ -265,11 +262,11 @@ function OpenItem({ index, proposal, text, onText, showConfidence, showSuggestio
       )}
 
       <p id={`${id}-m`} className="pending__meta">
-        {current.lowConfidence ? <Icon name="alert" size={14} strokeWidth={2} /> : <Icon name="check" size={14} strokeWidth={2} />}
-        <span>{mine ? 'Your sign' : current.lowConfidence ? 'Unsure, check it' : 'Check it'}</span>
-        {!mine && sign && <span>· sign “{sign}”</span>}
+        {current.lowConfidence ? <Icon name="alert" size={14} strokeWidth={2} /> : <Icon name="pencil" size={14} strokeWidth={1.8} />}
+        <span>{mine ? 'Your sign · tap the text to edit' : current.lowConfidence ? 'Unsure. Check it, or tap the text to edit' : 'Tap the text to edit'}</span>
+        {showConfidence && !mine && sign && <span>· sign “{sign}”</span>}
         {signPicking && <span className="pending__pick">· hold up 1–3 to pick{hold.candidate && selected !== hold.candidate - 1 ? ` (${hold.candidate}…)` : ''}</span>}
-        {proposal.glosses.length > 0 && <span>· gloss {proposal.glosses.join(' ')}</span>}
+        {showConfidence && proposal.glosses.length > 0 && <span>· gloss {proposal.glosses.join(' ')}</span>}
       </p>
     </li>
   )
