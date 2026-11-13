@@ -22,6 +22,12 @@ export interface Settings {
   highContrast: boolean
   reduceMotion: boolean
   mirrorCamera: boolean
+  /** Show up to three translations to choose from when reviewing a signed message. */
+  signSuggestions: boolean
+  /** Choose a suggestion by holding up 1, 2 or 3 fingers. */
+  pickBySign: boolean
+  /** Draw the tracked hand points on the camera, coloured by finger. */
+  showHandPoints: boolean
   signLanguage: SignLanguage
   /** BCP-47 language for speech captions, e.g. en-US */
   spokenLanguage: string
@@ -40,6 +46,9 @@ export const DEFAULT_SETTINGS: Settings = {
   highContrast: false,
   reduceMotion: false,
   mirrorCamera: true,
+  signSuggestions: true,
+  pickBySign: true,
+  showHandPoints: true,
   signLanguage: 'ASL',
   spokenLanguage: 'en-US',
   setupDone: false,

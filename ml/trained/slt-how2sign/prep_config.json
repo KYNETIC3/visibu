@@ -1,0 +1,41 @@
+{
+  "feature_version": 1,
+  "target_fps": 15,
+  "min_frames": 8,
+  "gloss_file": null,
+  "splits": {
+    "train": {
+      "kept": 30622,
+      "dropped": {
+        "no_landmarks": 118,
+        "too_short": 425,
+        "empty_sentence": 0,
+        "no_gloss": 0
+      }
+    },
+    "val": {
+      "kept": 1718,
+      "dropped": {
+        "no_landmarks": 2,
+        "too_short": 21,
+        "empty_sentence": 0,
+        "no_gloss": 0
+      }
+    },
+    "test": {
+      "kept": 2302,
+      "dropped": {
+        "no_landmarks": 14,
+        "too_short": 41,
+        "empty_sentence": 0,
+        "no_gloss": 0
+      }
+    }
+  },
+  "annotation_sha256": {
+    "train": "67a8f4fb6dc066f38006b89ac84c27a4b05d7fa07d5e6952f997042724d7a847",
+    "val": "1bf5d57ce90d61571776d06a179335d99648d8c94fc22b327d2abb328d26137c",
+    "test": "d1799dcbf100eda822eeb1a0e6e754d82b12b2a57756bd47073c4e4b8a02ae4d"
+  },
+  "landmarks_root": "/tmp/h2s/landmarks"
+}

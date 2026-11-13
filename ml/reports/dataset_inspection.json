@@ -1,0 +1,143 @@
+{
+  "root": "datasets/how2sign",
+  "splits": {
+    "train": {
+      "sentences": 31165,
+      "videos": 2192,
+      "hours": 59.33,
+      "duration_s": {
+        "median": 5.27,
+        "p95": 17.63,
+        "max": 143.03,
+        "min": 0.01
+      },
+      "words": {
+        "median": 15,
+        "max": 195
+      },
+      "signers": {
+        "1": 893,
+        "2": 422,
+        "3": 1861,
+        "4": 398,
+        "5": 12146,
+        "8": 14660,
+        "9": 292,
+        "11": 493
+      },
+      "clips_on_disk": 0,
+      "clips_on_disk_not_annotated": 0,
+      "landmarks_extracted": 0,
+      "empty_sentences": 0
+    },
+    "val": {
+      "sentences": 1741,
+      "videos": 115,
+      "hours": 3.34,
+      "duration_s": {
+        "median": 5.7,
+        "p95": 17.31,
+        "max": 57.99,
+        "min": 0.02
+      },
+      "words": {
+        "median": 15,
+        "max": 103
+      },
+      "signers": {
+        "1": 276,
+        "2": 270,
+        "3": 306,
+        "5": 454,
+        "8": 435
+      },
+      "clips_on_disk": 1739,
+      "clips_on_disk_not_annotated": 0,
+      "landmarks_extracted": 417,
+      "empty_sentences": 0
+    },
+    "test": {
+      "sentences": 2357,
+      "videos": 149,
+      "hours": 4.35,
+      "duration_s": {
+        "median": 5.23,
+        "p95": 17.5,
+        "max": 45.79,
+        "min": 0.11
+      },
+      "words": {
+        "median": 15,
+        "max": 115
+      },
+      "signers": {
+        "1": 224,
+        "2": 243,
+        "3": 546,
+        "5": 627,
+        "8": 449,
+        "10": 268
+      },
+      "clips_on_disk": 0,
+      "clips_on_disk_not_annotated": 0,
+      "landmarks_extracted": 0,
+      "empty_sentences": 0
+    }
+  },
+  "leakage": {
+    "shared_source_videos": {
+      "train/val": 0,
+      "test/train": 0,
+      "test/val": 0
+    },
+    "signers_not_in_train": {
+      "val": [],
+      "test": [
+        "10"
+      ]
+    },
+    "note": "No source video is shared between splits. Signers ARE shared (How2Sign is not signer-independent), except the signers listed above, which form the only unseen-signer subset."
+  },
+  "vocabulary": {
+    "train_types": 15393,
+    "types_freq_ge_3": 7604,
+    "val_oov_rate_min_freq_3": 0.0329,
+    "test_oov_rate_min_freq_3": 0.034
+  },
+  "coffee_word_train_counts": {
+    "coffee": 76,
+    "latte": 7,
+    "espresso": 28,
+    "cappuccino": 3,
+    "mocha": 0,
+    "decaf": 0,
+    "tea": 180,
+    "milk": 133,
+    "oat": 0,
+    "almond": 8,
+    "soy": 6,
+    "sugar": 97,
+    "cream": 45,
+    "iced": 3,
+    "hot": 137,
+    "small": 246,
+    "medium": 64,
+    "large": 102,
+    "cup": 121,
+    "order": 174,
+    "please": 30,
+    "thank": 44,
+    "thanks": 9,
+    "card": 127,
+    "cash": 2,
+    "receipt": 6,
+    "straw": 14,
+    "name": 262,
+    "here": 2095,
+    "go": 2062,
+    "want": 3458,
+    "like": 2512
+  },
+  "gloss_annotations": "Not published. how2sign.github.io's download script lists 'Gloss annotations' under TODO and the website's gloss links point to an unrelated file. Gloss-supervised training needs a separately obtained gloss file (see --gloss in prepare_sequences.py).",
+  "licence": "CC BY-NC 4.0 (how2sign.github.io): attribution required, no commercial use."
+}

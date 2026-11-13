@@ -1,0 +1,16 @@
+# Visibu ML pipeline. Verified on macOS 27 (Apple M2, 8 GB) with Python 3.14.5.
+# torch 2.15.0 ships Apple MPS support in the default macOS arm64 wheel.
+# mediapipe 1.2.2 matches @mediapipe/tasks-vision 1.2.2 used by the app, so
+# training landmarks come from the same tracker the browser runs.
+torch==2.15.0
+numpy==2.5.4
+mediapipe==1.2.2
+opencv-python-headless==5.0.0.93
+onnx==1.23.2
+onnxscript==0.7.2
+onnxruntime==1.31.1
+sacrebleu==2.6.0
+rouge_score==0.1.2
+pytest==9.2.0
+pyarrow==26.0.1
+kaggle==2.2.4

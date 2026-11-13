@@ -932,6 +932,421 @@ main:focus {
   border-top-color: #3a3a3a;
 }
 
+/* ---------- Review a signed translation ---------- */
+/* ---------- Sign panel: status, translations to check, send all ---------- */
+.btn--sm {
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 15px;
+  border-radius: 12px;
+  gap: 6px;
+}
+
+.btn--sm.btn--icon {
+  width: 44px;
+  padding: 0;
+}
+
+.signpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.signpanel__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.signpanel__status {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.signpanel__title {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.signpanel__notice,
+.signpanel__warn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.signpanel__warn {
+  color: var(--warn-ink);
+}
+
+.signpanel__bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.signpanel__bar .field__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.signpanel__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--you);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.signpanel__hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.signpanel__empty {
+  padding: 18px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-m);
+  font-size: 15px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* The list keeps a fixed height and scrolls; the newest translation is open at the bottom. */
+.pending {
+  list-style: none;
+  margin: 0;
+  padding: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(340px, 45vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.pending__item {
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-raised);
+}
+
+.pending__item--folded {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 4px;
+}
+
+.pending__item--open {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 2px solid var(--you);
+  background: var(--surface);
+}
+
+.pending__peek {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+}
+
+.pending__peek:hover {
+  background: var(--hover);
+}
+
+.pending__peek:focus-visible {
+  outline: 3px solid var(--you);
+  outline-offset: 1px;
+}
+
+.pending__peek-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pending__num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pending__item--open .pending__num {
+  margin-top: 10px;
+  background: var(--you);
+  color: var(--surface);
+}
+
+.pending__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.pending__actions {
+  flex: none;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.pending__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+  min-height: 44px;
+  padding: 9px 12px;
+  font-size: 17px;
+  line-height: 1.35;
+  resize: none;
+  field-sizing: content;
+}
+
+.pending__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pending__pick {
+  font-weight: 700;
+  color: var(--you-ink);
+}
+
+.signpanel__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.signpanel__merged {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  color: var(--ink-2);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.signpanel__foot-actions {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+
+@media (max-width: 560px) {
+  .signpanel__foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pending__row {
+    flex-wrap: wrap;
+  }
+  .pending__text {
+    flex-basis: calc(100% - 32px);
+  }
+  .pending__row .pending__actions {
+    margin-left: auto;
+  }
+}
+
+/* Suggestions: compact chips, picked by tap or by holding up 1, 2 or 3. */
+.chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips__btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  max-width: 100%;
+  padding: 4px 12px 4px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.3;
+  text-align: left;
+  overflow: hidden;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.chips__btn:not(:has(.chips__num)) {
+  padding-left: 12px;
+}
+
+.chips__btn:hover {
+  border-color: var(--you);
+  background: var(--you-tint);
+}
+
+.chips__btn:focus-visible {
+  outline: 3px solid var(--you);
+  outline-offset: 2px;
+}
+
+.chips__btn[aria-pressed='true'] {
+  border: 2px solid var(--you);
+  background: var(--you-tint);
+}
+
+.chips__num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chips__btn[aria-pressed='true'] .chips__num {
+  background: var(--you);
+  color: var(--surface); /* light-on-blue in light theme, dark-on-light-blue in dark */
+}
+
+.chips__pct {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* Fills while the matching number is held up. */
+.chips__hold {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: var(--you);
+  transform-origin: left;
+  transform: scaleX(var(--hold, 0));
+}
+
+:root[data-contrast='high'] .chips__btn,
+:root[data-contrast='high'] .pending__item,
+:root[data-contrast='high'] .signpanel__empty {
+  border-color: currentColor;
+}
+
+.signbar__dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--ok);
+}
+
+.signbar__dot--off {
+  background: var(--line-strong);
+}
+
+.signbar__dot--signing {
+  background: var(--you);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.signbar__dot--translating {
+  background: var(--partner);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signbar__dot--signing {
+    animation: none;
+  }
+}
+
+/* Tracked hand points over the camera (HandOverlay.tsx). */
+.camera__hands {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.finger-key {
+  list-style: none;
+  margin: 0;
+  padding: 0 2px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.finger-key li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.finger-key__dot {
+  display: inline-grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  color: #111;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 /* ---------- Conversation ---------- */
 .turns {
   list-style: none;
@@ -1501,4 +1916,167 @@ button.primary:hover {
   .partner-view {
     padding: 24px 20px;
   }
+}
+
+/* ---------- My signs (MySigns.tsx) ---------- */
+.teach__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.teach__note {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.teach__meaning {
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.teach__takes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 10px;
+}
+
+.teach__take {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.teach__take--now {
+  border: 2px solid var(--you);
+  color: var(--you-ink);
+}
+
+.teach__take--done {
+  border: 1px solid var(--ok);
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.teach__redo {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--you-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.teach__live {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.teach__ask {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--you-line);
+  border-radius: var(--radius-m);
+  background: var(--you-tint-2);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.teach__result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-m);
+  background: var(--surface-muted);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.teach__result--ok {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.mysigns {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(420px, 55vh);
+  overflow-y: auto;
+}
+
+.mysigns__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-raised);
+}
+
+.mysigns__main {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mysigns__meaning {
+  font-size: 17px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.mysigns__meta {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.mysigns__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mysigns__edit {
+  flex: 1 1 100%;
+  display: flex;
+  gap: 6px;
+}
+
+.mysigns__edit .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+:root[data-contrast='high'] .mysigns__item,
+:root[data-contrast='high'] .teach__ask,
+:root[data-contrast='high'] .teach__take {
+  border-color: currentColor;
 }

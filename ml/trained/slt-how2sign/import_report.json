@@ -1,0 +1,20 @@
+{
+  "train": {
+    "sentences": 31165,
+    "imported": 31047,
+    "missing_file": 118,
+    "frames_15fps_median": 79.0
+  },
+  "val": {
+    "sentences": 1741,
+    "imported": 1739,
+    "missing_file": 2,
+    "frames_15fps_median": 78.0
+  },
+  "test": {
+    "sentences": 2357,
+    "imported": 2343,
+    "missing_file": 14,
+    "frames_15fps_median": 79.0
+  }
+}

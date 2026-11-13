@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { CameraPanel, QualityCard } from '../components/CameraPanel'
 import { Icon } from '../components/Icon'
 import { PartnerView } from '../components/PartnerView'
+import { FingerKey } from '../components/HandOverlay'
+import { SignPanel } from '../components/ProposalReview'
 import { formatTime, useConversation } from '../lib/history'
 import { useSettings } from '../lib/settings'
+import { useMySigns } from '../lib/useMySigns'
 import { EXAMPLE_SIGN_CAPTION, useSignRecognition } from '../lib/signRecognizer'
 import { useTracker } from '../lib/useTracker'
 import type { useCamera } from '../lib/useCamera'
@@ -39,12 +42,22 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
   const listEnd = useRef<HTMLLIElement>(null)
 
   const live = camera.status === 'live'
+  const signing = live && !paused && mode === 'sign' && partnerText === null
 
-  // Tracker for sign recognition (runs MediaPipe Holistic in a worker)
-  // Tracker runs as a side effect; we only need its frame publishing to the bus.
+  // Choosing a suggestion by signing 1, 2 or 3 (for the oldest waiting translation).
+  const pickSetting = settings.signSuggestions && settings.pickBySign
+  // Sign translation proposes messages while the signer keeps signing; nothing is
+  // added or shown until the signer accepts it. Holding up 1, 2 or 3 is a choice, not a message.
+  const { signs: mySigns } = useMySigns()
+  const sign = useSignRecognition({ video: videoEl, active: signing, mySigns })
+  const pickBySign = pickSetting && (sign.proposals[0]?.suggestions.length ?? 0) > 1
+  const aspect = videoEl && videoEl.videoWidth > 0 && videoEl.videoHeight > 0 ? videoEl.videoWidth / videoEl.videoHeight : 16 / 9
+
+  // Tracker for sign recognition (runs MediaPipe Holistic in a worker). It
+  // publishes frames to the bus while the signer is signing.
   useTracker({
     video: videoEl,
-    active: live && !paused && mode === 'sign' && partnerText === null,
+    active: signing,
     onError: (msg) => {
       console.error('[Tracker]', msg);
       // Could surface to UI via a toast/banner if desired
@@ -68,12 +81,6 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
   useEffect(() => {
     setStatus(!live ? 'off' : paused ? 'paused' : 'live')
   }, [live, paused, setStatus])
-
-  const sign = useSignRecognition({
-    video: videoEl,
-    active: live && !paused && mode === 'sign' && partnerText === null,
-    onSentence: (text) => addTurn('you', 'signed', text),
-  })
 
   const speech = useSpeechCaptions({
     lang: settings.spokenLanguage,
@@ -109,11 +116,28 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
 
   const isSpeech = mode === 'speech'
   // Real caption text only. The example below is display-only: never copied, shown or saved.
-  const captionText = isSpeech ? speech.interim || recentPartner : sign.words.join(' ')
-  const showExample = !isSpeech && !sign.modelConnected && live && !paused
+  const captionText = isSpeech ? speech.interim || recentPartner : ''
+  const modelState = sign.status.state
+  const modelMissing = modelState === 'unavailable' || modelState === 'error'
+  const showExample = !isSpeech && modelMissing && live && !paused
   const displayText = showExample ? EXAMPLE_SIGN_CAPTION : captionText
   const captionWords = displayText ? displayText.split(/\s+/) : []
-  const inProgress = isSpeech ? speech.interim.length > 0 : sign.words.length > 0 && !sign.lastSign?.endsSentence
+  const inProgress = isSpeech ? speech.interim.length > 0 : sign.activity === 'signing'
+  const signPlaceholder =
+    modelState === 'loading'
+      ? 'Loading the sign models…'
+      : sign.activity === 'signing'
+        ? 'Signing… lower your hands when done.'
+        : sign.activity === 'translating'
+          ? 'Translating…'
+          : 'Ready. Sign, then lower your hands.'
+  // Sign status lives in the sign panel, not over the camera picture.
+
+  const acceptProposals = (text: string, ids: number[]) => {
+    addTurn('you', 'signed', text)
+    sign.resolve(ids)
+    setPartnerText(text)
+  }
   const lastTurn = turns[turns.length - 1]
 
   const copy = async () => {
@@ -154,22 +178,22 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
           paused={paused}
           alert={isSpeech && speech.speaking}
           handsVisible={mode === 'sign' ? sign.handsVisible : null}
-          lastSign={sign.lastSign}
-          showConfidence={settings.showConfidence}
-          showSign={mode === 'sign' && sign.modelConnected}
+          signStatus={null}
+          showHandPoints={settings.showHandPoints && mode === 'sign'}
           onStart={() => void camera.start()}
         />
+        {settings.showHandPoints && mode === 'sign' && live && <FingerKey />}
 
-        <div className="row">
-          <button type="button" className="btn" onClick={() => setPaused((p) => !p)} aria-pressed={paused}>
+        <div className="row" style={{ gap: 8 }}>
+          <button type="button" className="btn btn--sm" onClick={() => setPaused((p) => !p)} aria-pressed={paused}>
             <Icon name={paused ? 'play' : 'pause'} />
             {paused ? 'Resume' : 'Pause'}
           </button>
-          <button type="button" className="btn" onClick={() => update({ mirrorCamera: !settings.mirrorCamera })} aria-pressed={settings.mirrorCamera}>
+          <button type="button" className="btn btn--sm" onClick={() => update({ mirrorCamera: !settings.mirrorCamera })} aria-pressed={settings.mirrorCamera}>
             <Icon name="mirror" />
             Mirror view
           </button>
-          <a className="btn" href="#/setup">
+          <a className="btn btn--sm" href="#/setup">
             <Icon name="refresh" />
             Re-check setup
           </a>
@@ -177,12 +201,7 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
 
         <QualityCard lighting={camera.lighting} handsVisible={sign.handsVisible} live={live} />
 
-        {!sign.modelConnected && (
-          <p className="card__hint" style={{ padding: '0 4px' }}>
-            <strong>Sign recognition is not connected yet.</strong> The caption shows an example sentence that is never
-            saved. Speech captions, quick replies and typed messages are real.
-          </p>
-        )}
+        <SignModelNote status={sign.status} />
       </section>
 
       <section aria-label="Translation" className="split__main">
@@ -195,88 +214,120 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
               <Icon name="mic" /> Partner is speaking
             </button>
           </div>
-          <div role="group" aria-label="Caption size" className="row" style={{ gap: 8 }}>
-            <span style={{ fontSize: 15, color: 'var(--muted)', fontWeight: 600 }}>Caption size</span>
-            {SIZES.map((s) => (
-              <button
-                key={s.px}
-                type="button"
-                className="size-btn"
-                aria-label={s.label}
-                aria-pressed={settings.captionSize === s.px}
-                onClick={() => update({ captionSize: s.px })}
-                style={{ fontSize: s.fs }}
-              >
-                A
-              </button>
-            ))}
-          </div>
+          {isSpeech && (
+            <div role="group" aria-label="Caption size" className="row" style={{ gap: 8 }}>
+              <span style={{ fontSize: 15, color: 'var(--muted)', fontWeight: 600 }}>Caption size</span>
+              {SIZES.map((s) => (
+                <button
+                  key={s.px}
+                  type="button"
+                  className="size-btn"
+                  aria-label={s.label}
+                  aria-pressed={settings.captionSize === s.px}
+                  onClick={() => update({ captionSize: s.px })}
+                  style={{ fontSize: s.fs }}
+                >
+                  A
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <ModeBanner mode={mode} speech={speech} />
 
-        <div key={flashKey} className={`card card--xl caption-card${flashKey ? ' caption-card--flash' : ''}`}>
-          <div className="row row--between">
-            {settings.showSpeaker ? (
-              <span className={`pill ${isSpeech ? 'pill--partner' : 'pill--you'}`}>
-                <Icon name={isSpeech ? 'mic' : 'hand'} size={16} />
-                {isSpeech ? 'Partner · speaking' : 'You · signing'}
-              </span>
-            ) : (
-              <span />
-            )}
-            {showExample ? (
-              <span className="pill pill--muted" style={{ height: 32, fontSize: 14 }}>
-                Example · not saved
-              </span>
-            ) : (
-              <span className="card__hint">Live caption</span>
-            )}
-          </div>
+        {!isSpeech && !showExample && (
+          <SignPanel
+            proposals={sign.proposals}
+            status={paused ? 'Paused. Press Resume to continue.' : live ? signPlaceholder : 'Turn on the camera to start.'}
+            activity={paused || !live ? 'off' : sign.activity}
+            notice={sign.notice}
+            onDone={sign.finish}
+            showConfidence={settings.showConfidence}
+            showSuggestions={settings.signSuggestions}
+            pickBySign={pickBySign && signing}
+            aspect={aspect}
+            onAccept={acceptProposals}
+            onPickedBySign={sign.notePick}
+            onDiscard={sign.resolve}
+          />
+        )}
 
-          <p className={`caption${showExample ? ' caption--example' : ''}`} aria-label={showExample ? 'Example caption' : 'Live caption'}>
-            {captionWords.length === 0 ? (
-              <span className="caption__placeholder">
-                {paused
-                  ? 'Paused. Press Resume to continue.'
-                  : isSpeech
-                    ? 'Listening for your partner…'
-                    : live
-                      ? 'Start signing. Your words will appear here.'
-                      : 'Turn on the camera to start.'}
-              </span>
-            ) : (
-              captionWords.map((w, i) => (
-                <span key={`${i}-${w}`} className={`caption__word${isSpeech && speech.interim ? ' caption__interim' : ''}`}>
-                  {w}
+        {(isSpeech || showExample) && (
+          <div key={flashKey} className={`card card--xl caption-card${flashKey ? ' caption-card--flash' : ''}`}>
+            <div className="row row--between">
+              {settings.showSpeaker ? (
+                <span className={`pill ${isSpeech ? 'pill--partner' : 'pill--you'}`}>
+                  <Icon name={isSpeech ? 'mic' : 'hand'} size={16} />
+                  {isSpeech ? 'Partner · speaking' : 'You · signing'}
                 </span>
-              ))
-            )}
-            {inProgress && <span className="caret" aria-hidden="true" />}
-          </p>
+              ) : (
+                <span />
+              )}
+              {showExample ? (
+                <span className="pill pill--muted" style={{ height: 32, fontSize: 14 }}>
+                  Example · not saved
+                </span>
+              ) : (
+                <span className="card__hint">Live caption</span>
+              )}
+            </div>
 
-          <div className="caption-card__actions">
-            <button type="button" className="btn btn--primary" onClick={() => setPartnerText(captionText || lastTurn?.text || '')}>
-              <Icon name="screen" /> Show to partner
-            </button>
-            <button type="button" className="btn" onClick={copy}>
-              <Icon name="copy" /> {copied ? 'Copied' : 'Copy text'}
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => {
-                sign.clear()
-                setRecentPartner('')
-              }}
-            >
-              <Icon name="close" /> Clear
-            </button>
-            <span className="sr-only" role="status">
-              {copied ? 'Caption copied to clipboard' : ''}
-            </span>
+            <p className={`caption${showExample ? ' caption--example' : ''}`} aria-label={showExample ? 'Example caption' : 'Live caption'}>
+              {captionWords.length === 0 ? (
+                <span className="caption__placeholder">
+                  {paused
+                    ? 'Paused. Press Resume to continue.'
+                    : isSpeech
+                      ? 'Listening for your partner…'
+                      : live
+                        ? signPlaceholder
+                        : 'Turn on the camera to start.'}
+                </span>
+              ) : (
+                captionWords.map((w, i) => (
+                  <span key={`${i}-${w}`} className={`caption__word${isSpeech && speech.interim ? ' caption__interim' : ''}`}>
+                    {w}
+                  </span>
+                ))
+              )}
+              {inProgress && <span className="caret" aria-hidden="true" />}
+            </p>
+
+            {!isSpeech && sign.notice && (
+              <p className="card__hint" role="status" style={{ fontSize: 17 }}>
+                {sign.notice}
+              </p>
+            )}
+
+            <div className="caption-card__actions">
+              {!isSpeech && sign.activity === 'signing' && (
+                <button type="button" className="btn btn--primary" onClick={sign.finish}>
+                  <Icon name="check" /> Done signing
+                </button>
+              )}
+              <button type="button" className="btn btn--primary" onClick={() => setPartnerText(captionText || lastTurn?.text || '')}>
+                <Icon name="screen" /> Show to partner
+              </button>
+              <button type="button" className="btn" onClick={copy}>
+                <Icon name="copy" /> {copied ? 'Copied' : 'Copy text'}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  sign.clearNotice()
+                  setRecentPartner('')
+                }}
+              >
+                <Icon name="close" /> Clear
+              </button>
+              <span className="sr-only" role="status">
+                {copied ? 'Caption copied to clipboard' : ''}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="split" style={{ gap: 20 }}>
           <section className="card card--lift stack" style={{ flex: '3 1 360px', minWidth: 0 }} aria-labelledby="conv-h">
@@ -342,17 +393,8 @@ export function Translate({ camera, onAlert, setStatus }: Props) {
 }
 
 function ModeBanner({ mode, speech }: { mode: Mode; speech: ReturnType<typeof useSpeechCaptions> }) {
-  if (mode === 'sign') {
-    return (
-      <div className="banner banner--you" role="status">
-        <Icon name="hand" size={24} />
-        <div>
-          <div className="banner__title">Watching your hands</div>
-          <div className="banner__text">Sign at a comfortable pace. Words appear as each sign is recognised.</div>
-        </div>
-      </div>
-    )
-  }
+  // Signing mode shows its status in the bar under the queue instead.
+  if (mode === 'sign') return null
   if (speech.status === 'unsupported') {
     return (
       <div className="banner banner--warn" role="alert">
@@ -389,5 +431,31 @@ function ModeBanner({ mode, speech }: { mode: Mode; speech: ReturnType<typeof us
         <div className="banner__text">Their words appear below as they talk. The screen edge glows when speech starts.</div>
       </div>
     </div>
+  )
+}
+
+function SignModelNote({ status }: { status: ReturnType<typeof useSignRecognition>['status'] }) {
+  if (status.state === 'ready') {
+    const m = status.model
+    return (
+      <p className="card__hint" style={{ padding: '0 4px' }}>
+        <strong>{m.stage === 'smoke' ? 'Test model loaded.' : 'Research model, not validated with Deaf signers.'}</strong>{' '}
+        Sentences: trained on How2Sign (non-commercial research licence).
+        {m.words && <> Single signs: {m.words.signs} everyday signs{m.words.testTop1 !== null ? `, right first time for ${Math.round(m.words.testTop1 * 100)}% of signs by people it had not seen` : ''}.</>} Translations can be wrong, so you accept each one. Version {m.version}.
+      </p>
+    )
+  }
+  if (status.state === 'loading') {
+    return (
+      <p className="card__hint" style={{ padding: '0 4px' }} role="status">
+        Loading the sign translation model on this device…
+      </p>
+    )
+  }
+  return (
+    <p className="card__hint" style={{ padding: '0 4px' }}>
+      <strong>Sign translation is not available.</strong> {status.reason} The caption shows an example sentence that is
+      never saved. Speech captions, quick replies and typed messages are real.
+    </p>
   )
 }

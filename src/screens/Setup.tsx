@@ -104,9 +104,7 @@ export function Setup({ camera }: { camera: ReturnType<typeof useCamera> }) {
                   paused={false}
                   alert={false}
                   handsVisible={null}
-                  lastSign={null}
-                  showConfidence={false}
-                  showSign={false}
+                  signStatus={null}
                   showFrame={step === 2}
                   onStart={() => void camera.start()}
                 />

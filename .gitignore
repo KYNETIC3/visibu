@@ -7,3 +7,14 @@ dist/
 .DS_Store
 # Copied or downloaded by `npm run assets`
 public/mediapipe/
+# Sign translation models in public/models/ ARE committed (see public/models/README.md
+# for their licences), so a clone works without extra downloads.
+# ML: environment, How2Sign data and anything derived from it
+ml/.venv/
+ml/datasets/
+ml/checkpoints/
+ml/exports/
+ml/reports/eval_*.json
+__pycache__/
+.pytest_cache/
+tsconfig.tsbuildinfo
