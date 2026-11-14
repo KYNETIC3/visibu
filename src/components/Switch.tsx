@@ -7,21 +7,19 @@ interface Props {
   onChange: (next: boolean) => void
 }
 
-/** A labelled on/off row. Uses role="switch" so screen readers announce on/off. */
+/** A labelled on/off settings cell. Uses role="switch" so screen readers announce on/off. */
 export function SwitchRow({ title, description, checked, onChange }: Props) {
   const id = useId()
   return (
-    <div className="opt">
-      <div className="opt__body">
-        <div id={`${id}-t`} className="opt__title">
-          {title}
-        </div>
+    <div className="cell">
+      <span className="cell__main">
+        <span id={`${id}-t`}>{title}</span>
         {description && (
-          <div id={`${id}-d`} className="opt__desc">
+          <span id={`${id}-d`} className="cell__sub">
             {description}
-          </div>
+          </span>
         )}
-      </div>
+      </span>
       <button
         type="button"
         role="switch"

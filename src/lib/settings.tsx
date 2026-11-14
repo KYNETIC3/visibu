@@ -5,7 +5,7 @@ export type SignLanguage = 'ASL' | 'BSL' | 'Auslan' | 'NSL'
 export type Theme = 'system' | 'light' | 'dark'
 
 export const THEMES: { id: Theme; label: string }[] = [
-  { id: 'system', label: 'Match device' },
+  { id: 'system', label: 'Automatic' },
   { id: 'light', label: 'Light' },
   { id: 'dark', label: 'Dark' },
 ]
@@ -32,6 +32,10 @@ export interface Settings {
   /** BCP-47 language for speech captions, e.g. en-US */
   spokenLanguage: string
   setupDone: boolean
+  /** Scales the whole interface, like Dynamic Type. 1 = default. */
+  textScale: number
+  /** The one-time "Before you start" notice has been dismissed. */
+  welcomeSeen: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -52,7 +56,11 @@ export const DEFAULT_SETTINGS: Settings = {
   signLanguage: 'ASL',
   spokenLanguage: 'en-US',
   setupDone: false,
+  textScale: 1,
+  welcomeSeen: false,
 }
+
+export const TEXT_SCALE = { min: 0.9, max: 1.4, step: 0.1 }
 
 export const SIGN_LANGUAGES: { id: SignLanguage; name: string }[] = [
   { id: 'ASL', name: 'American Sign Language (ASL)' },
@@ -78,6 +86,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     writeJSON(KEY, settings)
     const root = document.documentElement
     root.style.setProperty('--caption-size', `${settings.captionSize}px`)
+    const scale = Math.min(TEXT_SCALE.max, Math.max(TEXT_SCALE.min, Number(settings.textScale) || 1))
+    root.style.setProperty('--text-scale', String(scale))
     root.dataset.theme = settings.theme
     root.dataset.contrast = settings.highContrast ? 'high' : 'normal'
     root.dataset.motion = settings.reduceMotion ? 'reduce' : 'normal'

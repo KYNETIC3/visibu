@@ -69,6 +69,28 @@ export function deleteSession(id: string) {
   save(loadSessions().filter((s) => s.id !== id))
 }
 
+/** Remove every saved conversation from this device. */
+export function clearSessions() {
+  save([])
+}
+
+export type DayGroup = 'Today' | 'Yesterday' | 'Earlier'
+
+export function dayGroup(at: number, now = new Date()): DayGroup {
+  // Built from calendar dates, so a 23- or 25-hour day (daylight saving) still splits at midnight.
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime()
+  if (at >= startOfToday) return 'Today'
+  if (at >= startOfYesterday) return 'Yesterday'
+  return 'Earlier'
+}
+
+/** "9:42 AM" for today and yesterday, "Mon 10 Nov" for older. */
+export function formatShort(at: number, now = new Date()): string {
+  if (dayGroup(at, now) !== 'Earlier') return formatTime(at)
+  return new Date(at).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
 /** Live list of saved sessions, updated whenever any screen saves. */
 export function useSessions(): Session[] {
   const [sessions, setSessions] = useState<Session[]>(loadSessions)

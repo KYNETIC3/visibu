@@ -313,9 +313,6 @@ export function createSignRecognizer(): SignRecognizer {
   return new OnnxSignRecognizer()
 }
 
-/** Shown in place of live sign captions when no model is installed. Never saved. */
-export const EXAMPLE_SIGN_CAPTION = 'Hello, I would like to book an appointment for Thursday.'
-
 interface Options {
   video: HTMLVideoElement | null
   active: boolean
